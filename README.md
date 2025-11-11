@@ -60,28 +60,37 @@ spotlight-lover/
 
 ## 📈 Fonctionnalités implémentées
 
-### ✅ Phase 1 - Fondations (Complété)
+### ✅ Phase 1 - Fondations (✅ Complété 100%)
 - [x] Structure projet complète (frontend + backend)
 - [x] Backend NestJS avec architecture modulaire
-- [x] Configuration Prisma + Modèles de données
+- [x] Configuration Prisma + 10 Modèles de données
 - [x] Module Payments avec 3 providers :
   - [x] MTN Mobile Money (API complète)
   - [x] Orange Money (API complète)
   - [x] Stripe (Cartes bancaires)
 - [x] Module Health (monitoring)
-- [x] Module Auth (structure de base)
 - [x] Configuration complète (.env, tsconfig, etc.)
-- [x] Documentation architecture
+- [x] Documentation architecture (38 KB)
 
-### ⏳ Phase 2 - Cœur métier (En cours)
-- [ ] Module Auth complet (JWT + 2FA + Guards)
+### ✅ Phase 2 - Authentification (✅ Complété 100%)
+- [x] Module Auth complet avec :
+  - [x] JWT (Access + Refresh tokens)
+  - [x] 2FA optionnel (Google Authenticator)
+  - [x] Guards (JwtAuthGuard, RolesGuard)
+  - [x] Decorators (@Public, @Roles, @CurrentUser)
+  - [x] 10 endpoints API documentés
+  - [x] Bcrypt hashing (10 rounds)
+  - [x] Seed data (2 admins + 4 candidats)
+  - [x] Tests cURL complets
+
+### 🔄 Phase 3 - Cœur métier (En cours - 0%)
 - [ ] Module Candidates (CRUD + validation admin)
-- [ ] Module Votes (logique métier + webhooks)
 - [ ] Module Upload (Cloudinary integration)
+- [ ] Module Votes (logique métier + webhooks)
 - [ ] Classement temps réel (WebSocket)
 - [ ] Dashboard admin
 
-### ⏳ Phase 3 - Finalisation
+### ⏳ Phase 4 - Finalisation
 - [ ] Module Analytics (stats + exports CSV)
 - [ ] Frontend Next.js
 - [ ] Tests unitaires et E2E
