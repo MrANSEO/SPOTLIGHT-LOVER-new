@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, Logger, BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { InitPaymentDto } from './dto/init-payment.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('payments')
 export class PaymentsController {
@@ -11,6 +12,7 @@ export class PaymentsController {
   /**
    * Test endpoint - Liste des providers disponibles
    */
+  @Public()
   @Get('providers')
   getProviders() {
     return {

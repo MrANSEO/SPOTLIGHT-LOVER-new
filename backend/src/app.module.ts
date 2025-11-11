@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { APP_GUARD } from '@nestjs/core';
 
 // Configuration
 import { databaseConfig } from './config/database.config';
@@ -11,6 +12,9 @@ import { paymentConfig } from './config/payment.config';
 
 // Database
 import { PrismaModule } from './prisma/prisma.module';
+
+// Guards
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -56,6 +60,14 @@ import { HealthModule } from './modules/health/health.module';
     UploadModule,
     PaymentsModule,
     HealthModule,
+  ],
+  providers: [
+    // Appliquer JwtAuthGuard globalement
+    // Les routes publiques doivent utiliser @Public()
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}
