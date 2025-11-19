@@ -12,7 +12,7 @@ import {
 import { VotesService } from './votes.service';
 import { PaymentsService } from '../payments/payments.service';
 import { Public } from '../../common/decorators/public.decorator';
-import { MtnWebhookDto, OrangeWebhookDto, StripeWebhookDto } from './dto';
+import { MtnWebhookDto, OrangeWebhookDto, StripeWebhookDto, MeSombWebhookDto } from './dto';
 import { PaymentStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -27,7 +27,94 @@ export class WebhooksController {
   ) {}
 
   /**
-   * Webhook MTN Mobile Money
+   * Webhook MeSomb (MTN + Orange unifié)
+   * POST /webhooks/mesomb
+   */
+  @Public()
+  @Post('mesomb')
+  @HttpCode(HttpStatus.OK)
+  async handleMeSombWebhook(
+    @Body() webhookDto: MeSombWebhookDto,
+    @Headers() headers: any,
+    @Req() req: any,
+  ) {
+    this.logger.log('Webhook MeSomb reçu', JSON.stringify(webhookDto));
+
+    try {
+      // 1. Vérifier la signature du webhook
+      const verification = this.paymentsService.verifyWebhookSignature(
+        'mesomb', // Provider type
+        webhookDto,
+        headers['x-mesomb-signature'] || headers['x-signature'],
+        headers,
+      );
+
+      if (!verification.isValid) {
+        this.logger.warn('Signature MeSomb invalide');
+        throw new BadRequestException('Signature invalide');
+      }
+
+      // 2. Logger le webhook
+      await this.logWebhook(
+        'MESOMB',
+        webhookDto.reference || webhookDto.pk,
+        webhookDto,
+        req.ip,
+      );
+
+      // 3. Déterminer le statut du paiement
+      let paymentStatus: PaymentStatus;
+      switch (webhookDto.status?.toUpperCase()) {
+        case 'SUCCESS':
+        case 'SUCCESSFUL':
+          paymentStatus = PaymentStatus.COMPLETED;
+          break;
+        case 'FAILED':
+        case 'FAILURE':
+          paymentStatus = PaymentStatus.FAILED;
+          break;
+        case 'PENDING':
+          paymentStatus = PaymentStatus.PENDING;
+          break;
+        default:
+          paymentStatus = PaymentStatus.FAILED;
+      }
+
+      // 4. Confirmer le paiement avec notre référence
+      await this.votesService.confirmPayment(
+        webhookDto.reference || webhookDto.pk,
+        paymentStatus,
+        webhookDto,
+      );
+
+      return {
+        success: true,
+        message: 'Webhook MeSomb traité avec succès',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erreur lors du traitement du webhook MeSomb: ${error.message}`,
+        error.stack,
+      );
+
+      // Logger l'erreur
+      await this.logWebhook(
+        'MESOMB',
+        webhookDto.reference || webhookDto.pk,
+        { ...webhookDto, error: error.message },
+        req.ip,
+      );
+
+      // Retourner OK quand même pour éviter les retry inutiles
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  /**
+   * Webhook MTN Mobile Money (LEGACY - conservé pour compatibilité)
    * POST /webhooks/mtn
    */
   @Public()
@@ -112,7 +199,7 @@ export class WebhooksController {
   }
 
   /**
-   * Webhook Orange Money
+   * Webhook Orange Money (LEGACY - conservé pour compatibilité)
    * POST /webhooks/orange
    */
   @Public()

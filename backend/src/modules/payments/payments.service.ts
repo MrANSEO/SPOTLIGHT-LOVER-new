@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { MtnMomoProvider } from './providers/mtn.provider';
 import { OrangeMoneyProvider } from './providers/orange.provider';
 import { StripeProvider } from './providers/stripe.provider';
+import { MeSombProvider } from './providers/mesomb.provider';
 import {
   IPaymentProvider,
   InitPaymentParams,
@@ -14,6 +15,7 @@ export enum PaymentProviderType {
   MTN = 'mtn',
   ORANGE = 'orange',
   STRIPE = 'stripe',
+  MESOMB = 'mesomb',
 }
 
 @Injectable()
@@ -21,6 +23,7 @@ export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
 
   constructor(
+    private readonly mesombProvider: MeSombProvider,
     private readonly mtnProvider: MtnMomoProvider,
     private readonly orangeProvider: OrangeMoneyProvider,
     private readonly stripeProvider: StripeProvider,
@@ -32,9 +35,13 @@ export class PaymentsService {
   private getProvider(providerType: string): IPaymentProvider {
     switch (providerType.toLowerCase()) {
       case PaymentProviderType.MTN:
-        return this.mtnProvider;
+        // MTN utilise maintenant MeSomb
+        return this.mesombProvider;
       case PaymentProviderType.ORANGE:
-        return this.orangeProvider;
+        // Orange utilise maintenant MeSomb
+        return this.mesombProvider;
+      case PaymentProviderType.MESOMB:
+        return this.mesombProvider;
       case PaymentProviderType.STRIPE:
         return this.stripeProvider;
       default:
