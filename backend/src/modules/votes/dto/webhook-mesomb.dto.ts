@@ -69,7 +69,6 @@ export class MeSombWebhookDto {
   @IsOptional()
   transaction?: any; // Transaction complète object
 
-  @IsObject()
-  @IsOptional()
-  [key: string]: any; // Autres propriétés possibles
+  // Index signature pour propriétés additionnelles (sans décorateurs)
+  [key: string]: any;
 }

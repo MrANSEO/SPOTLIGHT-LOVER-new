@@ -338,6 +338,7 @@ export class MeSombProvider implements IPaymentProvider {
 
         return {
           status: status as any,
+          providerReference: transaction.pk,
           reference: transaction.pk,
           amount: transaction.amount,
           currency: 'XAF',
@@ -346,7 +347,10 @@ export class MeSombProvider implements IPaymentProvider {
         this.logger.log('❌ Transaction non trouvée sur MeSomb');
         return {
           status: 'pending',
+          providerReference: providerReference,
           reference: providerReference,
+          amount: 0,
+          currency: 'XAF',
         };
       }
     } catch (error) {

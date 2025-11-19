@@ -26,6 +26,7 @@ export interface PaymentResponse {
 export interface TransactionStatus {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   providerReference: string;
+  reference?: string; // Notre référence interne (optionnel)
   amount: number;
   currency: string;
   message?: string;
