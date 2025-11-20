@@ -334,4 +334,89 @@ export class AuthService {
       window: 2, // Accepter les codes +/- 60 secondes
     });
   }
+
+  /**
+   * Mettre à jour le profil utilisateur
+   */
+  async updateProfile(adminId: string, data: { email?: string; fullName?: string; phone?: string }) {
+    this.logger.log(`📝 Mise à jour profil: ${adminId}`);
+
+    // Si email change, vérifier qu'il n'est pas déjà utilisé
+    if (data.email) {
+      const existingAdmin = await this.prisma.admin.findUnique({
+        where: { email: data.email },
+      });
+
+      if (existingAdmin && existingAdmin.id !== adminId) {
+        throw new ConflictException('Cet email est déjà utilisé');
+      }
+    }
+
+    // Mettre à jour
+    const admin = await this.prisma.admin.update({
+      where: { id: adminId },
+      data: {
+        email: data.email,
+        name: data.fullName,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+      },
+    });
+
+    this.logger.log(`✅ Profil mis à jour: ${adminId}`);
+    return admin;
+  }
+
+  /**
+   * Changer le mot de passe
+   */
+  async changePassword(adminId: string, oldPassword: string, newPassword: string) {
+    this.logger.log(`🔐 Changement de mot de passe: ${adminId}`);
+
+    // Vérifier l'ancien mot de passe
+    const admin = await this.prisma.admin.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('Admin non trouvé');
+    }
+
+    const isPasswordValid = await this.comparePassword(oldPassword, admin.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Ancien mot de passe incorrect');
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await this.hashPassword(newPassword);
+
+    // Mettre à jour
+    await this.prisma.admin.update({
+      where: { id: adminId },
+      data: { password: hashedPassword },
+    });
+
+    this.logger.log(`✅ Mot de passe changé: ${adminId}`);
+    return { message: 'Mot de passe changé avec succès' };
+  }
+
+  /**
+   * Supprimer le compte (soft delete)
+   */
+  async deleteAccount(adminId: string) {
+    this.logger.log(`🗑️ Suppression compte: ${adminId}`);
+
+    // Soft delete (désactiver le compte)
+    await this.prisma.admin.update({
+      where: { id: adminId },
+      data: { isActive: false },
+    });
+
+    this.logger.log(`✅ Compte désactivé: ${adminId}`);
+    return { message: 'Compte supprimé avec succès' };
+  }
 }

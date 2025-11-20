@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Body, UseGuards, Req, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, UseGuards, Req, Logger } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Enable2FADto } from './dto/enable-2fa.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -193,5 +195,73 @@ export class AuthController {
         role: admin.role,
       },
     };
+  }
+
+  /**
+   * Mettre à jour le profil utilisateur
+   * PATCH /auth/profile
+   */
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(
+    @CurrentUser('id') adminId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    try {
+      const profile = await this.authService.updateProfile(adminId, dto);
+      return {
+        success: true,
+        message: 'Profil mis à jour avec succès',
+        data: profile,
+      };
+    } catch (error) {
+      this.logger.error('❌ Erreur mise à jour profil', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Changer le mot de passe
+   * POST /auth/change-password
+   */
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser('id') adminId: string,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    try {
+      const result = await this.authService.changePassword(
+        adminId,
+        dto.oldPassword,
+        dto.newPassword,
+      );
+      return {
+        success: true,
+        message: result.message,
+      };
+    } catch (error) {
+      this.logger.error('❌ Erreur changement mot de passe', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Supprimer le compte (soft delete)
+   * DELETE /auth/account
+   */
+  @Delete('account')
+  @UseGuards(JwtAuthGuard)
+  async deleteAccount(@CurrentUser('id') adminId: string) {
+    try {
+      const result = await this.authService.deleteAccount(adminId);
+      return {
+        success: true,
+        message: result.message,
+      };
+    } catch (error) {
+      this.logger.error('❌ Erreur suppression compte', error.message);
+      throw error;
+    }
   }
 }
