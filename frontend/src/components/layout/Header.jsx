@@ -1,0 +1,133 @@
+import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import './Header.css';
+
+const Header = () => {
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const isActive = (path) => location.pathname === path;
+
+  const toggleMenu = () => setMenuOpen(!menuOpen);
+
+  return (
+    <header className="header">
+      <div className="header-container">
+        {/* Logo avec effet glow */}
+        <Link to="/" className="header-logo glow">
+          <span className="logo-icon">⭐</span>
+          <span className="logo-text">Spotlight Lover</span>
+        </Link>
+
+        {/* Navigation Desktop */}
+        <nav className="header-nav desktop-nav">
+          <Link 
+            to="/" 
+            className={`nav-link ${isActive('/') ? 'active' : ''}`}
+          >
+            Accueil
+          </Link>
+          <Link 
+            to="/about" 
+            className={`nav-link ${isActive('/about') ? 'active' : ''}`}
+          >
+            À propos
+          </Link>
+          <Link 
+            to="/gallery" 
+            className={`nav-link ${isActive('/gallery') ? 'active' : ''}`}
+          >
+            Galerie
+          </Link>
+          <Link 
+            to="/leaderboard" 
+            className={`nav-link ${isActive('/leaderboard') ? 'active' : ''}`}
+          >
+            Classement
+          </Link>
+        </nav>
+
+        {/* Boutons Auth */}
+        <div className="header-actions">
+          <Link to="/login" className="btn btn-outline btn-sm">
+            Connexion
+          </Link>
+          <Link to="/register" className="btn btn-primary btn-sm">
+            S'inscrire
+          </Link>
+
+          {/* Menu Burger Mobile */}
+          <button 
+            className="menu-burger"
+            onClick={toggleMenu}
+            aria-label="Toggle menu"
+          >
+            <span className={`burger-line ${menuOpen ? 'open' : ''}`}></span>
+            <span className={`burger-line ${menuOpen ? 'open' : ''}`}></span>
+            <span className={`burger-line ${menuOpen ? 'open' : ''}`}></span>
+          </button>
+        </div>
+      </div>
+
+      {/* Navigation Mobile */}
+      {menuOpen && (
+        <>
+          <div className="menu-overlay" onClick={toggleMenu}></div>
+          <nav className="header-nav mobile-nav slide-in-right">
+            <Link 
+              to="/" 
+              className={`nav-link ${isActive('/') ? 'active' : ''}`}
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">🏠</span>
+              Accueil
+            </Link>
+            <Link 
+              to="/about" 
+              className={`nav-link ${isActive('/about') ? 'active' : ''}`}
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">ℹ️</span>
+              À propos
+            </Link>
+            <Link 
+              to="/gallery" 
+              className={`nav-link ${isActive('/gallery') ? 'active' : ''}`}
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">🎬</span>
+              Galerie
+            </Link>
+            <Link 
+              to="/leaderboard" 
+              className={`nav-link ${isActive('/leaderboard') ? 'active' : ''}`}
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">🏆</span>
+              Classement
+            </Link>
+            <div className="divider"></div>
+            <Link 
+              to="/login" 
+              className="nav-link"
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">🔐</span>
+              Connexion
+            </Link>
+            <Link 
+              to="/register" 
+              className="nav-link"
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">✨</span>
+              S'inscrire
+            </Link>
+          </nav>
+        </>
+      )}
+    </header>
+  );
+};
+
+export default Header;
