@@ -1,14 +1,23 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
 
   const toggleMenu = () => setMenuOpen(!menuOpen);
+
+  const handleLogout = async () => {
+    await logout();
+    setMenuOpen(false);
+    navigate('/');
+  };
 
   return (
     <header className="header">
@@ -47,14 +56,27 @@ const Header = () => {
           </Link>
         </nav>
 
-        {/* Boutons Auth */}
+        {/* Boutons Auth / User Menu */}
         <div className="header-actions">
-          <Link to="/login" className="btn btn-outline btn-sm">
-            Connexion
-          </Link>
-          <Link to="/register" className="btn btn-primary btn-sm">
-            S'inscrire
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <Link to="/profile" className="user-avatar" title={user?.name || 'Profil'}>
+                <span className="avatar-text">{user?.name?.charAt(0) || '👤'}</span>
+              </Link>
+              <button onClick={handleLogout} className="btn btn-outline btn-sm">
+                Déconnexion
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="btn btn-outline btn-sm">
+                Connexion
+              </Link>
+              <Link to="/register" className="btn btn-primary btn-sm">
+                S'inscrire
+              </Link>
+            </>
+          )}
 
           {/* Menu Burger Mobile */}
           <button 
@@ -107,22 +129,53 @@ const Header = () => {
               Classement
             </Link>
             <div className="divider"></div>
-            <Link 
-              to="/login" 
-              className="nav-link"
-              onClick={toggleMenu}
-            >
-              <span className="nav-icon">🔐</span>
-              Connexion
-            </Link>
-            <Link 
-              to="/register" 
-              className="nav-link"
-              onClick={toggleMenu}
-            >
-              <span className="nav-icon">✨</span>
-              S'inscrire
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link 
+                  to="/profile" 
+                  className="nav-link"
+                  onClick={toggleMenu}
+                >
+                  <span className="nav-icon">👤</span>
+                  Mon Profil
+                </Link>
+                <Link 
+                  to="/settings" 
+                  className="nav-link"
+                  onClick={toggleMenu}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  Paramètres
+                </Link>
+                <button 
+                  onClick={handleLogout}
+                  className="nav-link"
+                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                >
+                  <span className="nav-icon">🚪</span>
+                  Déconnexion
+                </button>
+              </>
+            ) : (
+              <>
+                <Link 
+                  to="/login" 
+                  className="nav-link"
+                  onClick={toggleMenu}
+                >
+                  <span className="nav-icon">🔐</span>
+                  Connexion
+                </Link>
+                <Link 
+                  to="/register" 
+                  className="nav-link"
+                  onClick={toggleMenu}
+                >
+                  <span className="nav-icon">✨</span>
+                  S'inscrire
+                </Link>
+              </>
+            )}
           </nav>
         </>
       )}

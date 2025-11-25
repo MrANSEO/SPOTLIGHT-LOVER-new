@@ -1,0 +1,33 @@
+/* ==============================================
+   PROTECTED ROUTE - LOADING SCREEN
+   ============================================== */
+
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-primary);
+  background-size: 400% 400%;
+  animation: gradientMove 15s ease infinite;
+  z-index: var(--z-modal);
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xl);
+  text-align: center;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.loading-text {
+  font-size: var(--font-size-lg);
+  color: var(--white);
+  margin: 0;
+}

@@ -237,3 +237,29 @@
 .header.scrolled {
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
+
+/* ========== USER AVATAR ========== */
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gradient-button);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  color: var(--white);
+  text-decoration: none;
+  transition: all var(--transition-base);
+  box-shadow: 0 0 10px rgba(179, 0, 255, 0.3);
+}
+
+.user-avatar:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(179, 0, 255, 0.6);
+}
+
+.avatar-text {
+  font-size: var(--font-size-base);
+  text-transform: uppercase;
+}
