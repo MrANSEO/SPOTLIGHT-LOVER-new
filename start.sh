@@ -1,272 +1,212 @@
 #!/bin/bash
 
-# ==========================================
-# SPOTLIGHT LOVER - Script de Démarrage
-# ==========================================
+##############################################################################
+# 🚀 SPOTLIGHT LOVER - Script de démarrage automatique
+# Ce script démarre le backend (NestJS) et le frontend (React + Vite)
+##############################################################################
 
-echo "🌟 Spotlight Lover - Démarrage..."
-echo ""
+set -e  # Arrêter en cas d'erreur
 
 # Couleurs pour les logs
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
 RED='\033[0;31m'
+GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Fonction pour afficher les erreurs
-error() {
-  echo -e "${RED}❌ ERREUR: $1${NC}"
-  exit 1
+# Fonctions utilitaires
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-# Fonction pour afficher les succès
-success() {
-  echo -e "${GREEN}✅ $1${NC}"
+log_success() {
+    echo -e "${GREEN}[✓]${NC} $1"
 }
 
-# Fonction pour afficher les infos
-info() {
-  echo -e "${BLUE}ℹ️  $1${NC}"
+log_warning() {
+    echo -e "${YELLOW}[⚠]${NC} $1"
 }
 
-# Fonction pour afficher les warnings
-warning() {
-  echo -e "${YELLOW}⚠️  $1${NC}"
+log_error() {
+    echo -e "${RED}[✗]${NC} $1"
 }
 
-# ==========================================
-# 1. VÉRIFICATIONS PRÉALABLES
-# ==========================================
+# Header
+clear
+echo "╔════════════════════════════════════════════════════════════════════╗"
+echo "║                                                                    ║"
+echo "║           🎬 SPOTLIGHT LOVER - Démarrage Automatique              ║"
+echo "║                                                                    ║"
+echo "╚════════════════════════════════════════════════════════════════════╝"
+echo ""
 
-info "Vérification des prérequis..."
-
-# Vérifier Node.js
+# 1. Vérifier Node.js et npm
+log_info "Vérification des prérequis..."
 if ! command -v node &> /dev/null; then
-  error "Node.js n'est pas installé. Installez Node.js 18+ d'abord."
+    log_error "Node.js n'est pas installé !"
+    exit 1
 fi
-success "Node.js $(node --version) détecté"
-
-# Vérifier npm
 if ! command -v npm &> /dev/null; then
-  error "npm n'est pas installé."
+    log_error "npm n'est pas installé !"
+    exit 1
 fi
-success "npm $(npm --version) détecté"
+log_success "Node.js $(node --version) et npm $(npm --version) détectés"
 
-# Vérifier que nous sommes dans le bon dossier
-if [ ! -f "package.json" ] && [ ! -d "backend" ] && [ ! -d "frontend" ]; then
-  error "Ce script doit être exécuté depuis la racine du projet Spotlight Lover"
-fi
-
-echo ""
-info "Tous les prérequis sont satisfaits !"
-echo ""
-
-# ==========================================
-# 2. INSTALLATION DES DÉPENDANCES
-# ==========================================
-
-# Backend
-if [ ! -d "backend/node_modules" ]; then
-  info "Installation des dépendances backend..."
-  cd backend && npm install || error "Échec de l'installation des dépendances backend"
-  cd ..
-  success "Dépendances backend installées"
+# 2. Vérifier PostgreSQL
+log_info "Vérification de PostgreSQL..."
+if ! command -v psql &> /dev/null; then
+    log_warning "PostgreSQL CLI non détecté (peut être normal si DB distante)"
 else
-  success "Dépendances backend déjà installées"
+    log_success "PostgreSQL CLI détecté"
 fi
+
+# 3. Installer les dépendances backend (si nécessaire)
+log_info "Vérification des dépendances backend..."
+cd /home/user/spotlight-lover/backend
+if [ ! -d "node_modules" ]; then
+    log_info "Installation des dépendances backend (peut prendre quelques minutes)..."
+    npm install
+    log_success "Dépendances backend installées"
+else
+    log_success "Dépendances backend OK"
+fi
+
+# 4. Vérifier le fichier .env du backend
+if [ ! -f ".env" ]; then
+    log_warning "Fichier .env manquant dans /backend"
+    log_info "Création du fichier .env avec valeurs par défaut..."
+    cat > .env << 'EOL'
+# Server
+NODE_ENV=development
+PORT=3000
+API_PREFIX=api
+
+# Database (PostgreSQL)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/spotlight_lover?schema=public"
+
+# JWT
+JWT_ACCESS_SECRET=super-secret-change-this-in-production
+JWT_REFRESH_SECRET=another-super-secret-change-this-too
+
+# Cloudinary (pour upload vidéos)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+
+# MeSomb (Paiements MTN/Orange Money)
+MESOMB_API_KEY=your-mesomb-api-key
+MESOMB_SECRET_KEY=your-mesomb-secret-key
+MESOMB_APPLICATION_KEY=your-mesomb-app-key
 
 # Frontend
-if [ ! -d "frontend/node_modules" ]; then
-  info "Installation des dépendances frontend..."
-  cd frontend && npm install || error "Échec de l'installation des dépendances frontend"
-  cd ..
-  success "Dépendances frontend installées"
+FRONTEND_URL=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173
+
+# Autres
+BCRYPT_ROUNDS=10
+EOL
+    log_success "Fichier .env créé avec valeurs par défaut"
+    log_warning "⚠️  IMPORTANT : Configurez les variables d'environnement dans backend/.env"
+fi
+
+# 5. Générer Prisma Client
+log_info "Génération du client Prisma..."
+npx prisma generate > /dev/null 2>&1 || log_warning "Erreur génération Prisma (peut être ignoré si DB non configurée)"
+log_success "Client Prisma OK"
+
+# 6. Vérifier/Créer la base de données
+log_info "Vérification de la base de données..."
+if npx prisma db push --skip-generate > /dev/null 2>&1; then
+    log_success "Base de données synchronisée"
 else
-  success "Dépendances frontend déjà installées"
+    log_warning "Impossible de synchroniser la DB (configurez DATABASE_URL dans .env)"
 fi
 
-echo ""
-
-# ==========================================
-# 3. CONFIGURATION ENVIRONNEMENT
-# ==========================================
-
-info "Vérification des fichiers .env..."
-
-# Backend .env
-if [ ! -f "backend/.env" ]; then
-  warning "Fichier backend/.env non trouvé"
-  if [ -f "backend/.env.example" ]; then
-    info "Copie de .env.example vers .env..."
-    cp backend/.env.example backend/.env
-    warning "IMPORTANT: Éditez backend/.env avec vos vraies configurations !"
-    warning "Notamment: DATABASE_URL, JWT_SECRET, MESOMB_*, CLOUDINARY_*"
-    read -p "Appuyez sur Entrée quand c'est fait, ou Ctrl+C pour annuler..."
-  else
-    error "Fichier backend/.env.example non trouvé"
-  fi
+# 7. Installer les dépendances frontend
+log_info "Vérification des dépendances frontend..."
+cd /home/user/spotlight-lover/frontend
+if [ ! -d "node_modules" ]; then
+    log_info "Installation des dépendances frontend..."
+    npm install
+    log_success "Dépendances frontend installées"
 else
-  success "Fichier backend/.env existe"
+    log_success "Dépendances frontend OK"
 fi
 
-# Frontend .env
-if [ ! -f "frontend/.env" ]; then
-  warning "Fichier frontend/.env non trouvé"
-  echo "VITE_API_URL=http://localhost:4000/api" > frontend/.env
-  echo "VITE_WS_URL=ws://localhost:4000" >> frontend/.env
-  success "Fichier frontend/.env créé avec valeurs par défaut"
-else
-  success "Fichier frontend/.env existe"
+# 8. Vérifier le fichier .env du frontend
+if [ ! -f ".env" ]; then
+    log_info "Création du fichier .env frontend..."
+    cat > .env << 'EOL'
+VITE_API_URL=http://localhost:3000/api
+VITE_WS_URL=ws://localhost:3000
+VITE_ENV=development
+EOL
+    log_success "Fichier .env frontend créé"
 fi
 
-echo ""
+# 9. Nettoyer les ports utilisés
+log_info "Nettoyage des ports 3000 et 5173..."
+fuser -k 3000/tcp 2>/dev/null || true
+fuser -k 5173/tcp 2>/dev/null || true
+log_success "Ports nettoyés"
 
-# ==========================================
-# 4. CONFIGURATION BASE DE DONNÉES
-# ==========================================
-
-info "Configuration de la base de données..."
-
-# Vérifier si PostgreSQL est en cours d'exécution
-if command -v psql &> /dev/null; then
-  info "PostgreSQL détecté"
-  
-  # Générer le client Prisma
-  if [ -d "backend/node_modules/.prisma" ]; then
-    success "Client Prisma déjà généré"
-  else
-    info "Génération du client Prisma..."
-    cd backend && npx prisma generate || warning "Échec de la génération du client Prisma"
-    cd ..
-    success "Client Prisma généré"
-  fi
-  
-  # Exécuter les migrations
-  read -p "Voulez-vous exécuter les migrations Prisma ? (y/N) " -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    info "Exécution des migrations..."
-    cd backend && npx prisma migrate deploy || warning "Échec des migrations"
-    cd ..
-    success "Migrations exécutées"
-  else
-    warning "Migrations ignorées - Pensez à les exécuter manuellement : cd backend && npx prisma migrate deploy"
-  fi
-else
-  warning "PostgreSQL non détecté. Assurez-vous qu'il est installé et en cours d'exécution."
-  warning "Installation PostgreSQL : https://www.postgresql.org/download/"
-fi
-
-echo ""
-
-# ==========================================
-# 5. BUILD (optionnel pour dev)
-# ==========================================
-
-read -p "Voulez-vous builder le frontend avant de démarrer ? (y/N) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  info "Build du frontend..."
-  cd frontend && npm run build || warning "Échec du build frontend"
-  cd ..
-  success "Frontend buildé"
-fi
-
-echo ""
-
-# ==========================================
-# 6. DÉMARRAGE DES SERVICES
-# ==========================================
-
-info "Démarrage des services..."
-
-# Fonction pour tuer les processus sur les ports
-kill_port() {
-  local port=$1
-  local pid=$(lsof -ti:$port)
-  if [ ! -z "$pid" ]; then
-    warning "Processus trouvé sur le port $port (PID: $pid). Arrêt..."
-    kill -9 $pid 2>/dev/null || true
-    sleep 1
-  fi
-}
-
-# Nettoyer les ports si déjà utilisés
-kill_port 4000  # Backend
-kill_port 5173  # Frontend Vite dev
-
-# Démarrage du backend
-info "Démarrage du backend sur http://localhost:4000..."
-cd backend
-npm run start:dev > ../logs/backend.log 2>&1 &
+# 10. Démarrer le backend
+log_info "Démarrage du backend (port 3000)..."
+cd /home/user/spotlight-lover/backend
+npm run start:dev > /tmp/spotlight-backend.log 2>&1 &
 BACKEND_PID=$!
-cd ..
-success "Backend démarré (PID: $BACKEND_PID)"
+echo $BACKEND_PID > /tmp/spotlight-backend.pid
+log_success "Backend démarré (PID: $BACKEND_PID)"
 
 # Attendre que le backend soit prêt
-info "Attente du backend (max 30s)..."
+log_info "Attente du backend (max 30s)..."
 for i in {1..30}; do
-  if curl -s http://localhost:4000/api/health > /dev/null 2>&1; then
-    success "Backend prêt !"
-    break
-  fi
-  if [ $i -eq 30 ]; then
-    warning "Le backend met du temps à démarrer. Vérifiez les logs : tail -f logs/backend.log"
-  fi
-  sleep 1
+    if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+        log_success "Backend opérationnel !"
+        break
+    fi
+    sleep 1
+    if [ $i -eq 30 ]; then
+        log_error "Backend n'a pas démarré dans les 30 secondes"
+        log_info "Consultez les logs : tail -f /tmp/spotlight-backend.log"
+    fi
 done
 
-# Démarrage du frontend
-info "Démarrage du frontend sur http://localhost:5173..."
-cd frontend
-npm run dev > ../logs/frontend.log 2>&1 &
+# 11. Démarrer le frontend
+log_info "Démarrage du frontend (port 5173)..."
+cd /home/user/spotlight-lover/frontend
+npm run dev > /tmp/spotlight-frontend.log 2>&1 &
 FRONTEND_PID=$!
-cd ..
-success "Frontend démarré (PID: $FRONTEND_PID)"
-
-# Créer le dossier logs si nécessaire
-mkdir -p logs
+echo $FRONTEND_PID > /tmp/spotlight-frontend.pid
+log_success "Frontend démarré (PID: $FRONTEND_PID)"
 
 # Attendre que le frontend soit prêt
-info "Attente du frontend (max 20s)..."
-for i in {1..20}; do
-  if curl -s http://localhost:5173 > /dev/null 2>&1; then
-    success "Frontend prêt !"
-    break
-  fi
-  if [ $i -eq 20 ]; then
-    warning "Le frontend met du temps à démarrer. Vérifiez les logs : tail -f logs/frontend.log"
-  fi
-  sleep 1
+log_info "Attente du frontend (max 15s)..."
+for i in {1..15}; do
+    if curl -s http://localhost:5173 > /dev/null 2>&1; then
+        log_success "Frontend opérationnel !"
+        break
+    fi
+    sleep 1
 done
 
+# 12. Résumé final
 echo ""
-echo "=========================================="
-echo "🎉 Spotlight Lover est démarré !"
-echo "=========================================="
+echo "╔════════════════════════════════════════════════════════════════════╗"
+echo "║                 🎉 SPOTLIGHT LOVER EST EN LIGNE !                 ║"
+echo "╚════════════════════════════════════════════════════════════════════╝"
 echo ""
-echo "📍 URLs:"
-echo "   Frontend: ${GREEN}http://localhost:5173${NC}"
-echo "   Backend:  ${GREEN}http://localhost:4000/api${NC}"
-echo "   Swagger:  ${GREEN}http://localhost:4000/api/docs${NC}"
+log_success "Backend :  http://localhost:3000/api"
+log_success "Swagger :  http://localhost:3000/api/docs"
+log_success "Frontend : http://localhost:5173"
 echo ""
-echo "📊 Processus:"
-echo "   Backend PID:  ${BACKEND_PID}"
-echo "   Frontend PID: ${FRONTEND_PID}"
+log_info "PIDs sauvegardés dans /tmp/spotlight-*.pid"
+log_info "Logs disponibles : tail -f /tmp/spotlight-{backend,frontend}.log"
 echo ""
-echo "📝 Logs:"
-echo "   Backend:  ${BLUE}tail -f logs/backend.log${NC}"
-echo "   Frontend: ${BLUE}tail -f logs/frontend.log${NC}"
+log_warning "Pour arrêter : kill \$(cat /tmp/spotlight-backend.pid) \$(cat /tmp/spotlight-frontend.pid)"
 echo ""
-echo "🛑 Pour arrêter:"
-echo "   ${RED}kill ${BACKEND_PID} ${FRONTEND_PID}${NC}"
-echo "   ou appuyez sur Ctrl+C"
+log_info "🔐 Pour créer le compte admin initial :"
+echo "   cd /home/user/spotlight-lover/backend"
+echo "   npm run create-admin"
 echo ""
-echo "=========================================="
-
-# Garder le script en vie et surveiller les processus
-trap "echo ''; warning 'Arrêt des services...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" INT TERM
-
-# Attendre que l'utilisateur arrête manuellement
-wait
+log_success "Bonne utilisation ! 🚀"

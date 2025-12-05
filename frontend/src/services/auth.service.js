@@ -65,3 +65,20 @@ export const resetPassword = async (email, code, newPassword) => {
   const response = await api.post('/auth/reset-password', { email, code, newPassword });
   return response.data;
 };
+
+// Export default as an object for destructuring
+export const authService = {
+  login,
+  register,
+  logout,
+  refresh,
+  getProfile,
+  updateProfile,
+  changePassword,
+  deleteAccount,
+  requestPasswordReset,
+  verifyResetCode,
+  resetPassword
+};
+
+export default authService;

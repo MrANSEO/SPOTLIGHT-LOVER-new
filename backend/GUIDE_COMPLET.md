@@ -739,7 +739,7 @@ NEXT_PUBLIC_WS_URL=wss://ton-app.up.railway.app
 
 ## 📞 Support et Contact
 
-**Email** : support@spotlightlover.com  
+**Email** : abdellahoumar.456@gmail.com  
 **GitHub** : [https://github.com/MrANSEO/Spotlight-lover-project-back-end.](https://github.com/MrANSEO/Spotlight-lover-project-back-end.)
 
 ---

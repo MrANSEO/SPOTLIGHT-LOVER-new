@@ -1,15 +1,39 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { MainLayout } from './components/layout';
-import ProtectedRoute from './components/common/ProtectedRoute';
+import ProtectedRoute, { AdminRoute } from './components/common/ProtectedRoute';
 
 // Pages publiques
 import Home from './pages/public/Home';
+import About from './pages/special/About';
+import Contact from './pages/special/Contact';
+import FAQ from './pages/special/FAQ';
+import Legal from './pages/special/Legal';
+import NotFound from './pages/special/NotFound';
+import ServerError from './pages/special/ServerError';
 
 // Pages authentification
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import RecoverPassword from './pages/auth/RecoverPassword';
+
+// Pages utilisateur (protégées)
+import Feed from './pages/user/Feed';
+import Gallery from './pages/user/Gallery';
+import Leaderboard from './pages/user/Leaderboard';
+import Profile from './pages/user/Profile';
+import Settings from './pages/user/Settings';
+import Upload from './pages/user/Upload';
+import Notifications from './pages/user/Notifications';
+
+// Pages admin (protégées ADMIN)
+import Dashboard from './pages/admin/Dashboard';
+import AdminUsers from './pages/admin/Users';
+import AdminVideos from './pages/admin/Videos';
+import AdminVotes from './pages/admin/Votes';
+import AdminStats from './pages/admin/Stats';
+import AdminSettings from './pages/admin/Settings';
+import AdminLogs from './pages/admin/Logs';
 
 function App() {
   return (
@@ -18,23 +42,42 @@ function App() {
         <Routes>
           {/* Layout avec Header, Footer et BottomNav */}
           <Route element={<MainLayout />}>
-            {/* Pages publiques */}
+            {/* ============ PAGES PUBLIQUES ============ */}
             <Route path="/" element={<Home />} />
-            <Route path="/about" element={<div className="container section"><h1 className="section-title">À propos - En construction 🚧</h1></div>} />
-            <Route path="/gallery" element={<div className="container section"><h1 className="section-title">Galerie - En construction 🚧</h1></div>} />
-            <Route path="/leaderboard" element={<div className="container section"><h1 className="section-title">Classement - En construction 🚧</h1></div>} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/legal" element={<Legal />} />
+            <Route path="/404" element={<NotFound />} />
+            <Route path="/500" element={<ServerError />} />
             
-            {/* Pages authentification */}
+            {/* ============ AUTHENTIFICATION ============ */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/recover-password" element={<RecoverPassword />} />
             
-            {/* Pages protégées (nécessitent authentification) */}
+            {/* ============ PAGES UTILISATEUR (Protégées) ============ */}
             <Route 
               path="/feed" 
               element={
                 <ProtectedRoute>
-                  <div className="container section"><h1 className="section-title">Feed - En construction 🚧</h1></div>
+                  <Feed />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gallery" 
+              element={
+                <ProtectedRoute>
+                  <Gallery />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/leaderboard" 
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
                 </ProtectedRoute>
               } 
             />
@@ -42,7 +85,7 @@ function App() {
               path="/profile" 
               element={
                 <ProtectedRoute>
-                  <div className="container section"><h1 className="section-title">Profil - En construction 🚧</h1></div>
+                  <Profile />
                 </ProtectedRoute>
               } 
             />
@@ -50,7 +93,7 @@ function App() {
               path="/settings" 
               element={
                 <ProtectedRoute>
-                  <div className="container section"><h1 className="section-title">Paramètres - En construction 🚧</h1></div>
+                  <Settings />
                 </ProtectedRoute>
               } 
             />
@@ -58,7 +101,7 @@ function App() {
               path="/upload" 
               element={
                 <ProtectedRoute>
-                  <div className="container section"><h1 className="section-title">Upload - En construction 🚧</h1></div>
+                  <Upload />
                 </ProtectedRoute>
               } 
             />
@@ -66,13 +109,71 @@ function App() {
               path="/notifications" 
               element={
                 <ProtectedRoute>
-                  <div className="container section"><h1 className="section-title">Notifications - En construction 🚧</h1></div>
+                  <Notifications />
                 </ProtectedRoute>
               } 
             />
             
-            {/* Page 404 */}
-            <Route path="*" element={<div className="container section"><h1 className="section-title">404 - Page non trouvée</h1></div>} />
+            {/* ============ PAGES ADMIN (Protégées ADMIN) ============ */}
+            <Route 
+              path="/admin" 
+              element={
+                <AdminRoute>
+                  <Dashboard />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                <AdminRoute>
+                  <AdminUsers />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/videos" 
+              element={
+                <AdminRoute>
+                  <AdminVideos />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/votes" 
+              element={
+                <AdminRoute>
+                  <AdminVotes />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/stats" 
+              element={
+                <AdminRoute>
+                  <AdminStats />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/settings" 
+              element={
+                <AdminRoute>
+                  <AdminSettings />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/admin/logs" 
+              element={
+                <AdminRoute>
+                  <AdminLogs />
+                </AdminRoute>
+              } 
+            />
+            
+            {/* ============ PAGE 404 ============ */}
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </BrowserRouter>
