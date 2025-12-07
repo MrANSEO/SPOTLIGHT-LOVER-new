@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, AdminRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -8,14 +8,14 @@ async function createAdmin() {
     console.log('🔐 Création du compte administrateur...\n');
 
     // Vérifier si un admin existe déjà
-    const existingAdmin = await prisma.user.findFirst({
-      where: { role: UserRole.ADMIN }
+    const existingAdmin = await prisma.admin.findFirst({
+      where: { role: AdminRole.SUPER_ADMIN }
     });
 
     if (existingAdmin) {
-      console.log('⚠️  Un compte admin existe déjà :');
+      console.log('⚠️  Un compte SUPER_ADMIN existe déjà :');
       console.log(`   Email : ${existingAdmin.email}`);
-      console.log(`   Nom   : ${existingAdmin.username}`);
+      console.log(`   Nom   : ${existingAdmin.name}`);
       console.log(`   ID    : ${existingAdmin.id}\n`);
       
       const readline = require('readline').createInterface({
@@ -58,28 +58,30 @@ async function promptAdminDetails() {
   try {
     console.log('\n📝 Informations du compte admin :');
     const email = await question('Email : ');
-    const username = await question('Nom d\'utilisateur : ');
-    const phone = await question('Téléphone (+237...): ');
+    const name = await question('Nom complet : ');
     const password = await question('Mot de passe : ');
+    const roleChoice = await question('Role (1=SUPER_ADMIN, 2=MODERATOR) [1]: ');
+
+    const role = roleChoice === '2' ? AdminRole.MODERATOR : AdminRole.SUPER_ADMIN;
 
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Créer l'admin
-    const admin = await prisma.user.create({
+    const admin = await prisma.admin.create({
       data: {
         email,
-        username,
-        phone,
+        name,
         password: hashedPassword,
-        role: UserRole.ADMIN,
-        isEmailVerified: true
+        role,
+        isActive: true,
       }
     });
 
     console.log('\n✅ Compte admin créé avec succès !');
     console.log(`   ID    : ${admin.id}`);
     console.log(`   Email : ${admin.email}`);
+    console.log(`   Nom   : ${admin.name}`);
     console.log(`   Role  : ${admin.role}`);
     console.log('\n🚀 Vous pouvez maintenant vous connecter à /admin\n');
 
