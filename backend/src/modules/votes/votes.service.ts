@@ -25,8 +25,8 @@ export class VotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
-    @Inject(forwardRef(() => 'LeaderboardGateway'))
-    private readonly leaderboardGateway?: any,
+    // @Inject(forwardRef(() => LeaderboardGateway))
+    // private readonly leaderboardGateway?: any,
   ) {}
 
   /**

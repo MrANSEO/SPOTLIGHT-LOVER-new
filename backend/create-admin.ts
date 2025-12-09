@@ -1,4 +1,4 @@
-import { PrismaClient, AdminRole } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -9,7 +9,7 @@ async function createAdmin() {
 
     // Vérifier si un admin existe déjà
     const existingAdmin = await prisma.admin.findFirst({
-      where: { role: AdminRole.SUPER_ADMIN }
+      where: { role: 'SUPER_ADMIN' }
     });
 
     if (existingAdmin) {
@@ -62,7 +62,7 @@ async function promptAdminDetails() {
     const password = await question('Mot de passe : ');
     const roleChoice = await question('Role (1=SUPER_ADMIN, 2=MODERATOR) [1]: ');
 
-    const role = roleChoice === '2' ? AdminRole.MODERATOR : AdminRole.SUPER_ADMIN;
+    const role = roleChoice === '2' ? 'MODERATOR' : 'SUPER_ADMIN';
 
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 10);

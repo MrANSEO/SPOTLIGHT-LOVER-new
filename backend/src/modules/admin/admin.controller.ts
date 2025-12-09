@@ -15,7 +15,7 @@ import { AdminService } from './admin.service';
 // import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // import { RolesGuard } from '../auth/guards/roles.guard';
 // import { Roles } from '../auth/decorators/roles.decorator';
-import { AdminRole } from '@prisma/client';
+// Removed AdminRole enum - using string literals instead
 import {
   ApiTags,
   ApiOperation,
@@ -36,7 +36,7 @@ import { SystemSettingsDto } from './dto/system-settings.dto';
 @ApiBearerAuth()
 @Controller('admin')
 // @UseGuards(JwtAuthGuard, RolesGuard)
-// @Roles(AdminRole.SUPER_ADMIN)
+// @Roles('SUPER_ADMIN')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -48,22 +48,22 @@ export class AdminController {
   @Get('admins')
   @ApiOperation({ summary: 'Lister tous les utilisateurs' })
   @ApiQuery({ name: 'search', required: false, description: 'Recherche par nom/email' })
-  @ApiQuery({ name: 'role', required: false, enum: AdminRole })
+  @ApiQuery({ name: 'role', required: false, enum: ['SUPER_ADMIN', 'MODERATOR'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
   async getAllAdmins(
     @Query('search') search?: string,
-    @Query('role') role?: AdminRole,
+    @Query('role') role?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.adminService.getAllAdmins(
+      page ? parseInt(page) : 1,
+      limit ? parseInt(limit) : 20,
       search,
       role,
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
-    });
+    );
   }
 
   /**

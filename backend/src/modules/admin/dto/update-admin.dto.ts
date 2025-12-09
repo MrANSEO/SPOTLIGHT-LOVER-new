@@ -1,6 +1,5 @@
-import { IsString, IsEmail, IsOptional, IsEnum, IsBoolean } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsBoolean, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { AdminRole } from '@prisma/client';
 
 /**
  * DTO pour la mise à jour d'un admin
@@ -16,10 +15,10 @@ export class UpdateAdminDto {
   @IsOptional()
   name?: string;
 
-  @ApiPropertyOptional({ enum: AdminRole, example: AdminRole.MODERATOR })
-  @IsEnum(AdminRole)
+  @ApiPropertyOptional({ enum: ['SUPER_ADMIN', 'MODERATOR'], example: 'MODERATOR' })
+  @IsIn(['SUPER_ADMIN', 'MODERATOR'])
   @IsOptional()
-  role?: AdminRole;
+  role?: string;
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()
