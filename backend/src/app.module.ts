@@ -18,7 +18,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
-import { AdminModule } from './modules/admin/admin.module';
+import { UsersModule } from './modules/users/users.module';
 import { CandidatesModule } from './modules/candidates/candidates.module';
 import { VotesModule } from './modules/votes/votes.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
@@ -52,7 +52,7 @@ import { HealthModule } from './modules/health/health.module';
 
     // Feature Modules
     AuthModule,
-    AdminModule,
+    UsersModule,
     CandidatesModule,
     VotesModule,
     LeaderboardModule,

@@ -1,5 +1,5 @@
 // ==============================================
-// SPOTLIGHT LOVER - MINIMAL SCHEMA (SQLite)
+// SPOTLIGHT LOVER - DATABASE SCHEMA
 // ==============================================
 
 generator client {
@@ -7,160 +7,300 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // ==============================================
-// MODÈLE ADMIN
+// MODÈLE UTILISATEUR
 // ==============================================
-model Admin {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password      String
-  name          String
-  role          String    @default("MODERATOR") // "SUPER_ADMIN" ou "MODERATOR"
-  
-  // 2FA et sécurité
-  twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
-  twoFactorSecret  String?  @map("two_factor_secret")
-  isActive         Boolean  @default(true) @map("is_active")
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String
+  name            String
+  phone           String?   // Pour votes Mobile Money
+  userType        UserType  @default(USER) // USER, CANDIDATE, ADMIN, MODERATOR
+
+  // 2FA (Two-Factor Authentication)
+  twoFactorSecret String?  @map("two_factor_secret")
+  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
   
   // Métadonnées
-  lastLoginAt      DateTime?  @map("last_login_at")
-  lastLoginIp      String?    @map("last_login_ip")
-  failedLoginAttempts Int     @default(0) @map("failed_login_attempts")
+  lastLoginAt     DateTime? @map("last_login_at")
+  lastLoginIp     String?   @map("last_login_ip")
+  isActive        Boolean   @default(true) @map("is_active")
   
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
   // Relations
-  logs             AuditLog[]
-  
-  @@map("admins")
+  auditLogs       AuditLog[]
+  votesGiven      Vote[]    @relation("VoterVotes")   // Votes émis par cet utilisateur
+  candidate       Candidate? @relation(name: "UserCandidate") // Un USER peut être CANDIDAT
+
+  @@index([email])
+  @@map("users")
+}
+
+enum UserType {
+  USER          // Utilisateur simple (vote seulement)
+  CANDIDATE     // Candidat (paye 500 FCFA pour s'inscrire, publie vidéos)
+  ADMIN         // Super admin (accès complet)
+  MODERATOR     // Modérateur (valide candidats, gère signalements)
 }
 
 // ==============================================
-// MODÈLE CANDIDAT
+// MODÈLE CANDIDAT (lié à un User)
 // ==============================================
 model Candidate {
-  id            String    @id @default(uuid())
-  
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id") // Référence au User
+
   // Informations personnelles
-  name          String
-  age           Int
-  country       String
-  city          String
-  bio           String
+  age             Int
+  country         String
+  city            String
+  bio             String    @db.VarChar(200)
   
   // Vidéo
-  videoUrl      String    @map("video_url")
-  videoPublicId String?   @map("video_public_id")
-  videoDuration Int?      @map("video_duration")
-  thumbnailUrl  String?   @map("thumbnail_url")
-  
+  videoUrl        String    @map("video_url")
+  videoPublicId   String?   @map("video_public_id") // Cloudinary ID
+  videoDuration   Int?      @map("video_duration")  // secondes
+  videoFormat     String?   @map("video_format")
+  videoSize       Int?      @map("video_size")      // bytes
+  thumbnailUrl    String?   @map("thumbnail_url")
+
   // Réseaux sociaux
-  instagram     String?
-  tiktok        String?
-  phone         String
-  email         String
-  
+  instagramHandle String?   @map("instagram_handle")
+  tiktokHandle    String?   @map("tiktok_handle")
+  youtubeHandle   String?   @map("youtube_handle")
+
   // Statut
-  status        String    @default("PENDING") // PENDING, APPROVED, REJECTED, SUSPENDED
-  
-  // Métadonnées submission
-  submittedBy   String?   @map("submitted_by")
-  submissionIp  String?   @map("submission_ip")
-  userAgent     String?   @map("user_agent")
-  
+  status          CandidateStatus @default(PENDING)
+  validatedAt     DateTime?       @map("validated_at")
+  validatedBy     String?         @map("validated_by") // User.id (admin)
+  rejectionReason String?         @map("rejection_reason")
+
+  // Métadonnées
+  ipAddress       String?   @map("ip_address")
+  userAgent       String?   @map("user_agent")
+  countryCode     String?   @map("country_code")
+
   // Statistiques
-  totalVotes    Int       @default(0) @map("total_votes")
-  totalRevenue  Float     @default(0) @map("total_revenue")
-  viewCount     Int       @default(0) @map("view_count")
-  shareCount    Int       @default(0) @map("share_count")
-  rank          Int       @default(0)
-  
-  // Validation
-  validatedAt   DateTime? @map("validated_at")
-  validatedBy   String?   @map("validated_by")
-  rejectionReason String? @map("rejection_reason")
-  
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  
+  totalVotes      Int       @default(0) @map("total_votes")
+  totalRevenue    Int       @default(0) @map("total_revenue") // en FCFA
+  viewCount       Int       @default(0) @map("view_count")
+  shareCount      Int       @default(0) @map("share_count")
+  rank            Int?
+
   // Relations
-  votes         Vote[]
-  
+  user            User      @relation(name: "UserCandidate", fields: [userId], references: [id], onDelete: Cascade)
+  votesReceived   Vote[]    @relation("CandidateVotes")
+
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([totalVotes(sort: Desc)])
+  @@index([createdAt])
+  @@index([country])
   @@map("candidates")
+}
+
+enum CandidateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 }
 
 // ==============================================
 // MODÈLE VOTE
 // ==============================================
 model Vote {
-  id            String    @id @default(uuid())
-  candidateId   String    @map("candidate_id")
-  
-  // Informations votant
-  voterName     String?   @map("voter_name")
-  voterEmail    String?   @map("voter_email")
-  voterPhone    String    @map("voter_phone")
-  voterCountry  String?   @map("voter_country")
-  voterIp       String?   @map("voter_ip")
-  
+  id              String        @id @default(uuid())
+
+  // Qui vote ? → USER (simple ou candidat)
+  voterId         String        @map("voter_id")
+  voter           User          @relation("VoterVotes", fields: [voterId], references: [id], onDelete: Cascade)
+
+  // Pour qui ? → CANDIDAT
+  candidateId     String        @map("candidate_id")
+  candidate       Candidate     @relation("CandidateVotes", fields: [candidateId], references: [id], onDelete: Cascade)
+
+  // Informations votant (redondance pour traçabilité)
+  voterEmail      String?       @map("voter_email")
+  voterPhone      String?       @map("voter_phone")
+  voterName       String?       @map("voter_name")
+
   // Paiement
-  amount        Float     @default(100) // 100 FCFA par défaut
-  currency      String    @default("XOF")
-  paymentMethod String    @map("payment_method") // MTN_MOBILE_MONEY, ORANGE_MONEY, CARD
-  paymentProvider String? @map("payment_provider")
-  paymentStatus String    @default("PENDING") @map("payment_status") // PENDING, COMPLETED, FAILED
-  
-  // Références paiement
-  transactionId String?   @unique @map("transaction_id")
-  referenceId   String?   @map("reference_id")
-  
-  // Anti-fraude
-  fraudScore    Float?    @default(0) @map("fraud_score")
-  verifiedAt    DateTime? @map("verified_at")
-  
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  
+  amount          Int           @default(100) // 100 FCFA
+  currency        String        @default("XOF")
+  paymentMethod   PaymentMethod @map("payment_method")
+  paymentProvider String        @map("payment_provider") // "mtn", "orange", "stripe"
+  transactionId   String        @unique @map("transaction_id")
+  providerTxId    String?       @unique @map("provider_tx_id")
+  paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")
+
+  // Sécurité
+  ipAddress       String        @map("ip_address")
+  userAgent       String?       @map("user_agent")
+  isSuspicious    Boolean       @default(false) @map("is_suspicious")
+  isVerified      Boolean       @default(false) @map("is_verified")
+
+  // Timestamps
+  paidAt          DateTime?     @map("paid_at")
+  verifiedAt      DateTime?     @map("verified_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
   // Relations
-  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  
-  @@map("votes")
+  transaction     Transaction?
+
+  @@index([voterId])
   @@index([candidateId])
+  @@index([transactionId])
   @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("votes")
+}
+
+enum PaymentMethod {
+  MTN_MOBILE_MONEY
+  ORANGE_MONEY
+  MOOV_MONEY
+  WAVE
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+// ==============================================
+// MODÈLE TRANSACTION
+// ==============================================
+model Transaction {
+  id                String        @id @default(uuid())
+  voteId            String        @unique @map("vote_id")
+  vote              Vote          @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  amount            Int
+  currency          String        @default("XOF")
+  paymentMethod     PaymentMethod @map("payment_method")
+  provider          String
+  providerReference String        @unique @map("provider_reference")
+  status            PaymentStatus @default(PENDING)
+  failureReason     String?       @map("failure_reason")
+  initResponse      Json?         @map("init_response")
+  webhookPayload    Json?         @map("webhook_payload")
+  statusResponse    Json?         @map("status_response")
+  customerEmail     String?       @map("customer_email")
+  customerPhone     String?       @map("customer_phone")
+  customerName      String?       @map("customer_name")
+  ipAddress         String?       @map("ip_address")
+  userAgent         String?       @map("user_agent")
+  initiatedAt       DateTime      @default(now()) @map("initiated_at")
+  completedAt       DateTime?     @map("completed_at")
+  failedAt          DateTime?     @map("failed_at")
+  cancelledAt       DateTime?     @map("cancelled_at")
+  refundedAt        DateTime?     @map("refunded_at")
+  
+  @@index([providerReference])
+  @@index([status])
+  @@index([provider])
+  @@index([initiatedAt])
+  @@map("transactions")
 }
 
 // ==============================================
 // MODÈLE AUDIT LOG
 // ==============================================
 model AuditLog {
-  id          String    @id @default(uuid())
-  adminId     String    @map("admin_id")
+  id            String   @id @default(uuid())
+  adminId       String   @map("admin_id")
+  admin         User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  action        String
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  oldData       Json?    @map("old_data")
+  newData       Json?    @map("new_data")
+  details       Json?
+  ipAddress     String   @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
   
-  // Action
-  action      String    // CREATE, UPDATE, DELETE, APPROVE, REJECT
-  entityType  String    @map("entity_type") // CANDIDATE, VOTE, ADMIN, SETTINGS
-  entityId    String    @map("entity_id")
-  
-  // Données (string JSON)
-  oldData     String?   @map("old_data")
-  newData     String?   @map("new_data")
-  details     String?
-  
-  // Contexte
-  ipAddress   String?   @map("ip_address")
-  userAgent   String?   @map("user_agent")
-  
-  createdAt   DateTime  @default(now()) @map("created_at")
-  
-  // Relations
-  admin       Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
-  
-  @@map("audit_logs")
   @@index([adminId])
   @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ==============================================
+// STATISTIQUES QUOTIDIENNES
+// ==============================================
+model DailyStats {
+  id                    String    @id @default(uuid())
+  date                  DateTime  @unique @db.Date
+  totalCandidates       Int       @default(0) @map("total_candidates")
+  newCandidates         Int       @default(0) @map("new_candidates")
+  totalVotes            Int       @default(0) @map("total_votes")
+  totalRevenue          Int       @default(0) @map("total_revenue")
+  mtnVotes              Int       @default(0) @map("mtn_votes")
+  orangeVotes           Int       @default(0) @map("orange_votes")
+  moovVotes             Int       @default(0) @map("moov_votes")
+  waveVotes             Int       @default(0) @map("wave_votes")
+  cardVotes             Int       @default(0) @map("card_votes")
+  mtnRevenue            Int       @default(0) @map("mtn_revenue")
+  orangeRevenue         Int       @default(0) @map("orange_revenue")
+  cardRevenue           Int       @default(0) @map("card_revenue")
+  topCountries          Json?     @map("top_countries")
+  avgVotesPerCandidate  Float?    @map("avg_votes_per_candidate")
+  topCandidateId        String?   @map("top_candidate_id")
+  topCandidateVotes     Int?      @map("top_candidate_votes")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  @@index([date])
+  @@map("daily_stats")
+}
+
+// ==============================================
+// LOGS WEBHOOKS
+// ==============================================
+model WebhookLog {
+  id            String   @id @default(uuid())
+  provider      String
+  event         String
+  payload       Json
+  headers       Json?
+  processed     Boolean  @default(false)
+  processedAt   DateTime? @map("processed_at")
+  error         String?
+  ipAddress     String   @map("ip_address")
+  createdAt     DateTime @default(now()) @map("created_at")
+  @@index([provider])
+  @@index([processed])
+  @@index([createdAt])
+  @@map("webhook_logs")
+}
+
+// ==============================================
+// BLACKLIST IP
+// ==============================================
+model IpBlacklist {
+  id          String   @id @default(uuid())
+  ipAddress   String   @unique @map("ip_address")
+  reason      String
+  bannedBy    String   @map("banned_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  expiresAt   DateTime? @map("expires_at")
+  @@index([ipAddress])
+  @@map("ip_blacklist")
 }

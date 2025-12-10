@@ -1,27 +1,27 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpdateAdminDto } from './dto/update-admin.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { SystemSettingsDto } from './dto/system-settings.dto';
-import { AdminRole } from '@prisma/client';
+import { UserType } from '@prisma/client';
 
 /**
- * Service Admin
- * Gestion des admins, candidats, votes, statistiques
+ * Service Users (Admin)
+ * Gestion des users, candidats, votes, statistiques
  */
 @Injectable()
-export class AdminService {
+export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  // ========== GESTION ADMINS ==========
+  // ========== GESTION USERS ==========
 
   /**
-   * Récupérer tous les admins avec pagination
+   * Récupérer tous les users avec pagination
    */
-  async getAllAdmins(
+  async getAllUsers(
     page: number = 1,
     limit: number = 20,
     search?: string,
-    role?: AdminRole,
+    userType?: UserType,
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -33,12 +33,12 @@ export class AdminService {
       ];
     }
 
-    if (role) {
-      where.role = role;
+    if (userType) {
+      where.userType = userType;
     }
 
-    const [admins, total] = await Promise.all([
-      this.prisma.admin.findMany({
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
         where,
         skip,
         take: limit,
@@ -47,17 +47,18 @@ export class AdminService {
           id: true,
           email: true,
           name: true,
-          role: true,
+          phone: true,
+          userType: true,
           isActive: true,
           lastLoginAt: true,
           createdAt: true,
         },
       }),
-      this.prisma.admin.count({ where }),
+      this.prisma.user.count({ where }),
     ]);
 
     return {
-      data: admins,
+      data: users,
       meta: {
         total,
         page,
@@ -68,50 +69,53 @@ export class AdminService {
   }
 
   /**
-   * Récupérer un admin par ID
+   * Récupérer un user par ID
    */
-  async getAdminById(id: string) {
-    const admin = await this.prisma.admin.findUnique({
+  async getUserById(id: string) {
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
         isActive: true,
         twoFactorEnabled: true,
         lastLoginAt: true,
         lastLoginIp: true,
         createdAt: true,
         updatedAt: true,
+        candidate: true, // Inclure les infos candidat si existe
       },
     });
 
-    if (!admin) {
-      throw new NotFoundException(`Admin ${id} non trouvé`);
+    if (!user) {
+      throw new NotFoundException(`User ${id} non trouvé`);
     }
 
-    return admin;
+    return user;
   }
 
   /**
-   * Mettre à jour un admin
+   * Mettre à jour un user
    */
-  async updateAdmin(id: string, updateAdminDto: UpdateAdminDto) {
-    const admin = await this.prisma.admin.findUnique({ where: { id } });
+  async updateUser(id: string, updateUserDto: UpdateUserDto) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
 
-    if (!admin) {
-      throw new NotFoundException(`Admin ${id} non trouvé`);
+    if (!user) {
+      throw new NotFoundException(`User ${id} non trouvé`);
     }
 
-    const updated = await this.prisma.admin.update({
+    const updated = await this.prisma.user.update({
       where: { id },
-      data: updateAdminDto,
+      data: updateUserDto,
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
         isActive: true,
         updatedAt: true,
       },
@@ -121,22 +125,22 @@ export class AdminService {
   }
 
   /**
-   * Supprimer un admin
+   * Supprimer un user
    */
-  async deleteAdmin(id: string) {
-    const admin = await this.prisma.admin.findUnique({ where: { id } });
+  async deleteUser(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
 
-    if (!admin) {
-      throw new NotFoundException(`Admin ${id} non trouvé`);
+    if (!user) {
+      throw new NotFoundException(`User ${id} non trouvé`);
     }
 
-    if (admin.role === AdminRole.SUPER_ADMIN) {
-      throw new BadRequestException('Impossible de supprimer un SUPER_ADMIN');
+    if (user.userType === UserType.ADMIN) {
+      throw new BadRequestException('Impossible de supprimer un ADMIN');
     }
 
-    await this.prisma.admin.delete({ where: { id } });
+    await this.prisma.user.delete({ where: { id } });
 
-    return { message: 'Admin supprimé avec succès' };
+    return { message: 'User supprimé avec succès' };
   }
 
   // ========== GESTION CANDIDATS ==========
@@ -148,7 +152,7 @@ export class AdminService {
     page: number = 1,
     limit: number = 20,
     status?: string,
-    category?: string,
+    search?: string,
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -157,27 +161,27 @@ export class AdminService {
       where.status = status;
     }
 
+    if (search) {
+      where.user = {
+        name: { contains: search, mode: 'insensitive' }
+      };
+    }
+
     const [candidates, total] = await Promise.all([
       this.prisma.candidate.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          age: true,
-          country: true,
-          city: true,
-          bio: true,
-          videoUrl: true,
-          thumbnailUrl: true,
-          status: true,
-          totalVotes: true,
-          totalRevenue: true,
-          viewCount: true,
-          rank: true,
-          createdAt: true,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            }
+          }
         },
       }),
       this.prisma.candidate.count({ where }),
@@ -254,9 +258,20 @@ export class AdminService {
           candidate: {
             select: {
               id: true,
-              name: true,
+              user: {
+                select: {
+                  name: true,
+                }
+              }
             },
           },
+          voter: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            }
+          }
         },
       }),
       this.prisma.vote.count({ where }),
@@ -273,6 +288,40 @@ export class AdminService {
     };
   }
 
+  /**
+   * Récupérer un vote par ID
+   */
+  async getVoteById(id: string) {
+    const vote = await this.prisma.vote.findUnique({
+      where: { id },
+      include: {
+        candidate: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                name: true,
+              }
+            }
+          },
+        },
+        voter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        }
+      },
+    });
+
+    if (!vote) {
+      throw new NotFoundException(`Vote ${id} non trouvé`);
+    }
+
+    return vote;
+  }
+
   // ========== STATISTIQUES ==========
 
   /**
@@ -280,14 +329,14 @@ export class AdminService {
    */
   async getDashboardStats() {
     const [
-      totalAdmins,
+      totalUsers,
       totalCandidates,
       totalVotes,
       totalRevenue,
       pendingCandidates,
-      activeAdmins,
+      activeUsers,
     ] = await Promise.all([
-      this.prisma.admin.count(),
+      this.prisma.user.count(),
       this.prisma.candidate.count(),
       this.prisma.vote.count(),
       this.prisma.vote.aggregate({
@@ -295,15 +344,15 @@ export class AdminService {
         where: { paymentStatus: 'COMPLETED' },
       }),
       this.prisma.candidate.count({ where: { status: 'PENDING' } }),
-      this.prisma.admin.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where: { isActive: true } }),
     ]);
 
     // Statistiques des 7 derniers jours
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const [newAdmins, newVotes] = await Promise.all([
-      this.prisma.admin.count({
+    const [newUsers, newVotes] = await Promise.all([
+      this.prisma.user.count({
         where: { createdAt: { gte: sevenDaysAgo } },
       }),
       this.prisma.vote.count({
@@ -313,63 +362,18 @@ export class AdminService {
 
     return {
       overview: {
-        totalAdmins,
+        totalUsers,
         totalCandidates,
         totalVotes,
         totalRevenue: totalRevenue._sum.amount || 0,
         pendingCandidates,
-        activeAdmins,
+        activeUsers,
       },
       recentActivity: {
-        newAdmins,
+        newUsers,
         newVotes,
       },
     };
-  }
-
-  /**
-   * Statistiques détaillées pour les graphiques
-   */
-  async getAnalytics(startDate?: string, endDate?: string, groupBy: string = 'day') {
-    const dateFilter = startDate ? new Date(startDate) : undefined;
-
-    // Statistiques de votes par jour
-    const votes = await this.prisma.vote.findMany({
-      where: {
-        ...(dateFilter && { createdAt: { gte: dateFilter } }),
-      },
-      select: {
-        createdAt: true,
-        amount: true,
-        paymentMethod: true,
-      },
-    });
-
-    return {
-      votes,
-      summary: {
-        total: votes.length,
-        totalAmount: votes.reduce((sum, v) => sum + v.amount, 0),
-      },
-    };
-  }
-
-  /**
-   * Paramètres système
-   */
-  async getSystemSettings() {
-    // Pour l'instant, retourner des valeurs par défaut
-    return {
-      votePrice: 100,
-      maintenanceMode: false,
-      registrationEnabled: true,
-      autoApproval: false,
-    };
-  }
-
-  async updateSystemSettings(settings: SystemSettingsDto) {
-    // Pour l'instant, juste retourner les paramètres
-    return settings;
   }
 
   /**
@@ -402,21 +406,21 @@ export class AdminService {
   }
 
   /**
-   * Statistiques des admins
+   * Statistiques des users
    */
-  async getAdminsStats() {
-    const [byRole, byStatus] = await Promise.all([
-      this.prisma.admin.groupBy({
-        by: ['role'],
+  async getUsersStats() {
+    const [byType, byStatus] = await Promise.all([
+      this.prisma.user.groupBy({
+        by: ['userType'],
         _count: true,
       }),
-      this.prisma.admin.groupBy({
+      this.prisma.user.groupBy({
         by: ['isActive'],
         _count: true,
       }),
     ]);
 
-    return { byRole, byStatus };
+    return { byType, byStatus };
   }
 
   /**
@@ -432,26 +436,19 @@ export class AdminService {
   }
 
   /**
-   * Récupérer un vote par ID
+   * Paramètres système
    */
-  async getVoteById(id: string) {
-    const vote = await this.prisma.vote.findUnique({
-      where: { id },
-      include: {
-        candidate: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+  async getSystemSettings() {
+    return {
+      votePrice: 100,
+      maintenanceMode: false,
+      registrationEnabled: true,
+      autoApproval: false,
+    };
+  }
 
-    if (!vote) {
-      throw new NotFoundException(`Vote ${id} non trouvé`);
-    }
-
-    return vote;
+  async updateSystemSettings(settings: SystemSettingsDto) {
+    return settings;
   }
 
   /**

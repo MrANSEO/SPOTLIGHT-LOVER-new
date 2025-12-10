@@ -11,11 +11,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AdminService } from './admin.service';
+import { UsersService } from './users.service';
 // import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // import { RolesGuard } from '../auth/guards/roles.guard';
 // import { Roles } from '../auth/decorators/roles.decorator';
-// Removed AdminRole enum - using string literals instead
+import { UserType } from '@prisma/client';
 import {
   ApiTags,
   ApiOperation,
@@ -23,90 +23,99 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
-import { UpdateAdminDto } from './dto/update-admin.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateCandidateStatusDto } from './dto/update-candidate-status.dto';
 import { SystemSettingsDto } from './dto/system-settings.dto';
 
 /**
- * Contrôleur Admin
+ * Contrôleur Users (Admin)
  * Gestion des utilisateurs, candidats, votes, statistiques
- * Accès réservé aux administrateurs uniquement
+ * Accès réservé aux ADMIN/MODERATOR uniquement
  */
-@ApiTags('Admin')
+@ApiTags('Users (Admin)')
 @ApiBearerAuth()
-@Controller('admin')
+@Controller('admin/users')
 // @UseGuards(JwtAuthGuard, RolesGuard)
-// @Roles('SUPER_ADMIN')
-export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+// @Roles(UserType.ADMIN)
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
 
   // ===== GESTION UTILISATEURS =====
 
   /**
    * Récupérer tous les utilisateurs avec filtres
    */
-  @Get('admins')
+  @Get()
   @ApiOperation({ summary: 'Lister tous les utilisateurs' })
   @ApiQuery({ name: 'search', required: false, description: 'Recherche par nom/email' })
-  @ApiQuery({ name: 'role', required: false, enum: ['SUPER_ADMIN', 'MODERATOR'] })
+  @ApiQuery({ name: 'userType', required: false, enum: UserType })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
-  async getAllAdmins(
+  async getAllUsers(
     @Query('search') search?: string,
-    @Query('role') role?: string,
+    @Query('userType') userType?: UserType,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getAllAdmins(
+    return this.usersService.getAllUsers(
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 20,
       search,
-      role,
+      userType,
     );
   }
 
   /**
    * Récupérer un utilisateur par ID
    */
-  @Get('admins/:id')
+  @Get(':id')
   @ApiOperation({ summary: 'Détails d\'un utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur trouvé' })
   @ApiResponse({ status: 404, description: 'Utilisateur non trouvé' })
-  async getAdminById(@Param('id') id: string) {
-    return this.adminService.getAdminById(id);
+  async getUserById(@Param('id') id: string) {
+    return this.usersService.getUserById(id);
   }
 
   /**
    * Mettre à jour un utilisateur
    */
-  @Put('admins/:id')
+  @Put(':id')
   @ApiOperation({ summary: 'Modifier un utilisateur' })
   @ApiResponse({ status: 200, description: 'Utilisateur mis à jour' })
-  async updateAdmin(@Param('id') id: string, @Body() updateAdminDto: UpdateAdminDto) {
-    return this.adminService.updateAdmin(id, updateAdminDto);
+  async updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.updateUser(id, updateUserDto);
   }
 
   /**
    * Supprimer un utilisateur
    */
-  @Delete('admins/:id')
+  @Delete(':id')
   @ApiOperation({ summary: 'Supprimer un utilisateur' })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiResponse({ status: 204, description: 'Utilisateur supprimé' })
-  async deleteAdmin(@Param('id') id: string) {
-    return this.adminService.deleteAdmin(id);
+  async deleteUser(@Param('id') id: string) {
+    return this.usersService.deleteUser(id);
   }
 
   /**
    * Suspendre/activer un utilisateur
    */
-  @Put('admins/:id/status')
+  @Put(':id/status')
   @ApiOperation({ summary: 'Suspendre ou activer un utilisateur' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })
   async toggleUserStatus(@Param('id') id: string, @Body('active') active: boolean) {
-    // Méthode simplifiée - utilise updateAdmin avec isActive
-    return this.adminService.updateAdmin(id, { isActive: active });
+    return this.usersService.updateUser(id, { isActive: active });
+  }
+
+  /**
+   * Changer le type d'un utilisateur
+   */
+  @Put(':id/type')
+  @ApiOperation({ summary: 'Changer le type d\'utilisateur (USER, CANDIDATE, ADMIN, MODERATOR)' })
+  @ApiResponse({ status: 200, description: 'Type modifié' })
+  async changeUserType(@Param('id') id: string, @Body('userType') userType: UserType) {
+    return this.usersService.updateUser(id, { userType });
   }
 
   // ===== GESTION CANDIDATS =====
@@ -114,7 +123,7 @@ export class AdminController {
   /**
    * Récupérer tous les candidats avec filtres
    */
-  @Get('candidates')
+  @Get('candidates/all')
   @ApiOperation({ summary: 'Lister tous les candidats' })
   @ApiQuery({ name: 'status', required: false, description: 'Filtrer par statut' })
   @ApiQuery({ name: 'search', required: false, description: 'Recherche par nom' })
@@ -127,7 +136,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getAllCandidates(
+    return this.usersService.getAllCandidates(
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 20,
       status,
@@ -142,7 +151,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Approuver un candidat' })
   @ApiResponse({ status: 200, description: 'Candidat approuvé' })
   async approveCandidate(@Param('id') id: string) {
-    return this.adminService.updateCandidateStatus(id, 'APPROVED');
+    return this.usersService.updateCandidateStatus(id, 'APPROVED');
   }
 
   /**
@@ -155,7 +164,7 @@ export class AdminController {
     @Param('id') id: string,
     @Body() dto: UpdateCandidateStatusDto,
   ) {
-    return this.adminService.updateCandidateStatus(id, 'REJECTED', dto.reason);
+    return this.usersService.updateCandidateStatus(id, 'REJECTED', dto.reason);
   }
 
   /**
@@ -166,7 +175,7 @@ export class AdminController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiResponse({ status: 204, description: 'Candidat supprimé' })
   async deleteCandidate(@Param('id') id: string) {
-    return this.adminService.deleteCandidate(id);
+    return this.usersService.deleteCandidate(id);
   }
 
   // ===== GESTION VOTES =====
@@ -174,7 +183,7 @@ export class AdminController {
   /**
    * Récupérer tous les votes avec filtres
    */
-  @Get('votes')
+  @Get('votes/all')
   @ApiOperation({ summary: 'Lister tous les votes' })
   @ApiQuery({ name: 'candidateId', required: false })
   @ApiQuery({ name: 'status', required: false })
@@ -187,7 +196,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getAllVotes(
+    return this.usersService.getAllVotes(
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 50,
       status
@@ -201,7 +210,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Détails d\'un vote' })
   @ApiResponse({ status: 200, description: 'Vote trouvé' })
   async getVoteById(@Param('id') id: string) {
-    return this.adminService.getVoteById(id);
+    return this.usersService.getVoteById(id);
   }
 
   // ===== STATISTIQUES =====
@@ -213,7 +222,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Statistiques du dashboard' })
   @ApiResponse({ status: 200, description: 'Statistiques globales' })
   async getDashboardStats() {
-    return this.adminService.getDashboardStats();
+    return this.usersService.getDashboardStats();
   }
 
   /**
@@ -224,7 +233,7 @@ export class AdminController {
   @ApiQuery({ name: 'period', required: false, description: 'Période (7d, 30d, 90d, all)' })
   @ApiResponse({ status: 200, description: 'Statistiques des votes' })
   async getVotesStats(@Query('period') period?: string) {
-    return this.adminService.getVotesStats(period || '30d');
+    return this.usersService.getVotesStats(period || '30d');
   }
 
   /**
@@ -233,8 +242,8 @@ export class AdminController {
   @Get('dashboard/users-stats')
   @ApiOperation({ summary: 'Statistiques des utilisateurs' })
   @ApiResponse({ status: 200, description: 'Statistiques des utilisateurs' })
-  async getAdminsStats() {
-    return this.adminService.getAdminsStats();
+  async getUsersStats() {
+    return this.usersService.getUsersStats();
   }
 
   /**
@@ -244,7 +253,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Statistiques des candidats' })
   @ApiResponse({ status: 200, description: 'Statistiques des candidats' })
   async getCandidatesStats() {
-    return this.adminService.getCandidatesStats();
+    return this.usersService.getCandidatesStats();
   }
 
   // ===== LOGS SYSTÈME =====
@@ -252,7 +261,7 @@ export class AdminController {
   /**
    * Récupérer les logs système
    */
-  @Get('logs')
+  @Get('logs/all')
   @ApiOperation({ summary: 'Logs système' })
   @ApiQuery({ name: 'type', required: false, description: 'Type de log (auth, payment, error)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -263,7 +272,7 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.getLogs({
+    return this.usersService.getLogs({
       type,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 50,
@@ -275,11 +284,11 @@ export class AdminController {
   /**
    * Récupérer les paramètres système
    */
-  @Get('settings')
+  @Get('settings/all')
   @ApiOperation({ summary: 'Paramètres système' })
   @ApiResponse({ status: 200, description: 'Paramètres actuels' })
   async getSystemSettings() {
-    return this.adminService.getSystemSettings();
+    return this.usersService.getSystemSettings();
   }
 
   /**
@@ -289,6 +298,6 @@ export class AdminController {
   @ApiOperation({ summary: 'Modifier les paramètres système' })
   @ApiResponse({ status: 200, description: 'Paramètres mis à jour' })
   async updateSystemSettings(@Body() settings: SystemSettingsDto) {
-    return this.adminService.updateSystemSettings(settings);
+    return this.usersService.updateSystemSettings(settings);
   }
 }

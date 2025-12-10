@@ -24,7 +24,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset",
-    "create-admin": "ts-node create-admin.ts"
+    "create-admin": "ts-node create-admin.ts",
+    "seed-user": "node seed-user.js"
   },
   "dependencies": {
     "@hachther/mesomb": "^2.0.1",
