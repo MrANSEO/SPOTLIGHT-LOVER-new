@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException, BadRequestException, Conflic
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
@@ -20,86 +21,88 @@ export class AuthService {
   ) {}
 
   /**
-   * Inscription d'un nouvel administrateur
+   * Inscription d'un nouvel utilisateur
    */
   async register(dto: RegisterDto): Promise<AuthResponse> {
     this.logger.log(`📝 Tentative d'inscription: ${dto.email}`);
 
     // Vérifier si l'email existe déjà
-    const existingAdmin = await this.prisma.admin.findUnique({
+    const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
 
-    if (existingAdmin) {
+    if (existingUser) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
     // Hasher le mot de passe
     const hashedPassword = await this.hashPassword(dto.password);
 
-    // Créer l'admin
-    const admin = await this.prisma.admin.create({
+    // Créer l'utilisateur
+    const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
         name: dto.name,
-        role: dto.role,
+        phone: dto.phone,
+        userType: dto.userType,
         isActive: true,
       },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
       },
     });
 
     // Générer les tokens JWT
-    const tokens = await this.generateTokens(admin);
+    const tokens = await this.generateTokens(user);
 
-    this.logger.log(`✅ Admin créé avec succès: ${admin.email}`);
+    this.logger.log(`✅ User créé avec succès: ${user.email} (${user.userType})`);
 
     return {
-      admin,
+      user,
       tokens,
     };
   }
 
   /**
-   * Connexion d'un administrateur
+   * Connexion d'un utilisateur
    */
   async login(dto: LoginDto, ipAddress?: string): Promise<AuthResponse> {
     this.logger.log(`🔐 Tentative de connexion: ${dto.email}`);
 
-    // Trouver l'admin par email
-    const admin = await this.prisma.admin.findUnique({
+    // Trouver l'utilisateur par email
+    const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
 
-    if (!admin) {
+    if (!user) {
       throw new UnauthorizedException('Identifiants invalides');
     }
 
-    // Vérifier si l'admin est actif
-    if (!admin.isActive) {
+    // Vérifier si l'utilisateur est actif
+    if (!user.isActive) {
       throw new UnauthorizedException('Compte désactivé');
     }
 
     // Vérifier le mot de passe
-    const isPasswordValid = await this.comparePassword(dto.password, admin.password);
+    const isPasswordValid = await this.comparePassword(dto.password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Identifiants invalides');
     }
 
     // Si 2FA est activé, vérifier le code
-    if (admin.twoFactorEnabled) {
+    if (user.twoFactorEnabled) {
       if (!dto.twoFactorCode) {
         return {
-          admin: {
-            id: admin.id,
-            email: admin.email,
-            name: admin.name,
-            role: admin.role,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            userType: user.userType,
           },
           tokens: { accessToken: '', refreshToken: '' },
           requires2FA: true,
@@ -107,15 +110,15 @@ export class AuthService {
       }
 
       // Vérifier le code 2FA
-      const is2FAValid = this.verify2FAToken(admin.twoFactorSecret, dto.twoFactorCode);
+      const is2FAValid = this.verify2FAToken(user.twoFactorSecret, dto.twoFactorCode);
       if (!is2FAValid) {
         throw new UnauthorizedException('Code 2FA invalide');
       }
     }
 
     // Mettre à jour la dernière connexion
-    await this.prisma.admin.update({
-      where: { id: admin.id },
+    await this.prisma.user.update({
+      where: { id: user.id },
       data: {
         lastLoginAt: new Date(),
         lastLoginIp: ipAddress,
@@ -124,20 +127,21 @@ export class AuthService {
 
     // Générer les tokens JWT
     const tokens = await this.generateTokens({
-      id: admin.id,
-      email: admin.email,
-      name: admin.name,
-      role: admin.role,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      userType: user.userType,
     });
 
-    this.logger.log(`✅ Connexion réussie: ${admin.email}`);
+    this.logger.log(`✅ Connexion réussie: ${user.email} (${user.userType})`);
 
     return {
-      admin: {
-        id: admin.id,
-        email: admin.email,
-        name: admin.name,
-        role: admin.role,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        userType: user.userType,
       },
       tokens,
     };
@@ -146,48 +150,48 @@ export class AuthService {
   /**
    * Renouveler les tokens avec le refresh token
    */
-  async refreshTokens(adminId: string): Promise<JwtTokens> {
-    this.logger.log(`🔄 Renouvellement tokens pour admin: ${adminId}`);
+  async refreshTokens(userId: string): Promise<JwtTokens> {
+    this.logger.log(`🔄 Renouvellement tokens pour user: ${userId}`);
 
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        userType: true,
         isActive: true,
       },
     });
 
-    if (!admin || !admin.isActive) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Accès non autorisé');
     }
 
-    return this.generateTokens(admin);
+    return this.generateTokens(user);
   }
 
   /**
    * Générer un secret 2FA et un QR Code
    */
-  async generate2FASecret(adminId: string): Promise<{ secret: string; qrCodeUrl: string }> {
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
+  async generate2FASecret(userId: string): Promise<{ secret: string; qrCodeUrl: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    if (!admin) {
-      throw new UnauthorizedException('Admin non trouvé');
+    if (!user) {
+      throw new UnauthorizedException('User non trouvé');
     }
 
     // Générer un secret 2FA
     const secret = speakeasy.generateSecret({
-      name: `Spotlight Lover (${admin.email})`,
+      name: `Spotlight Lover (${user.email})`,
       issuer: 'Spotlight Lover',
     });
 
     // Sauvegarder le secret (temporairement, pas encore activé)
-    await this.prisma.admin.update({
-      where: { id: adminId },
+    await this.prisma.user.update({
+      where: { id: userId },
       data: {
         twoFactorSecret: secret.base32,
       },
@@ -196,7 +200,7 @@ export class AuthService {
     // Générer un QR Code
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
-    this.logger.log(`🔐 Secret 2FA généré pour: ${admin.email}`);
+    this.logger.log(`🔐 Secret 2FA généré pour: ${user.email}`);
 
     return {
       secret: secret.base32,
@@ -207,31 +211,31 @@ export class AuthService {
   /**
    * Activer le 2FA après vérification du code
    */
-  async enable2FA(adminId: string, token: string): Promise<{ success: boolean }> {
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
+  async enable2FA(userId: string, token: string): Promise<{ success: boolean }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    if (!admin || !admin.twoFactorSecret) {
+    if (!user || !user.twoFactorSecret) {
       throw new BadRequestException('Secret 2FA non généré');
     }
 
     // Vérifier le token
-    const isValid = this.verify2FAToken(admin.twoFactorSecret, token);
+    const isValid = this.verify2FAToken(user.twoFactorSecret, token);
 
     if (!isValid) {
       throw new BadRequestException('Code 2FA invalide');
     }
 
     // Activer le 2FA
-    await this.prisma.admin.update({
-      where: { id: adminId },
+    await this.prisma.user.update({
+      where: { id: userId },
       data: {
         twoFactorEnabled: true,
       },
     });
 
-    this.logger.log(`✅ 2FA activé pour admin: ${admin.email}`);
+    this.logger.log(`✅ 2FA activé pour user: ${user.email}`);
 
     return { success: true };
   }
@@ -239,42 +243,43 @@ export class AuthService {
   /**
    * Désactiver le 2FA
    */
-  async disable2FA(adminId: string): Promise<{ success: boolean }> {
-    await this.prisma.admin.update({
-      where: { id: adminId },
+  async disable2FA(userId: string): Promise<{ success: boolean }> {
+    await this.prisma.user.update({
+      where: { id: userId },
       data: {
         twoFactorEnabled: false,
         twoFactorSecret: null,
       },
     });
 
-    this.logger.log(`❌ 2FA désactivé pour admin: ${adminId}`);
+    this.logger.log(`❌ 2FA désactivé pour user: ${userId}`);
 
     return { success: true };
   }
 
   /**
-   * Obtenir le profil de l'admin connecté
+   * Obtenir le profil de l'utilisateur connecté
    */
-  async getProfile(adminId: string) {
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
         twoFactorEnabled: true,
         lastLoginAt: true,
         createdAt: true,
       },
     });
 
-    if (!admin) {
-      throw new UnauthorizedException('Admin non trouvé');
+    if (!user) {
+      throw new UnauthorizedException('User non trouvé');
     }
 
-    return admin;
+    return user;
   }
 
   // ============================================
@@ -299,11 +304,11 @@ export class AuthService {
   /**
    * Générer les tokens JWT (access + refresh)
    */
-  private async generateTokens(admin: { id: string; email: string; name?: string; role: string }): Promise<JwtTokens> {
+  private async generateTokens(user: { id: string; email: string; name?: string; userType: UserType }): Promise<JwtTokens> {
     const payload: JwtPayload = {
-      sub: admin.id,
-      email: admin.email,
-      role: admin.role,
+      sub: user.id,
+      email: user.email,
+      userType: user.userType,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -338,55 +343,57 @@ export class AuthService {
   /**
    * Mettre à jour le profil utilisateur
    */
-  async updateProfile(adminId: string, data: { email?: string; fullName?: string; phone?: string }) {
-    this.logger.log(`📝 Mise à jour profil: ${adminId}`);
+  async updateProfile(userId: string, data: { email?: string; name?: string; phone?: string }) {
+    this.logger.log(`📝 Mise à jour profil: ${userId}`);
 
     // Si email change, vérifier qu'il n'est pas déjà utilisé
     if (data.email) {
-      const existingAdmin = await this.prisma.admin.findUnique({
+      const existingUser = await this.prisma.user.findUnique({
         where: { email: data.email },
       });
 
-      if (existingAdmin && existingAdmin.id !== adminId) {
+      if (existingUser && existingUser.id !== userId) {
         throw new ConflictException('Cet email est déjà utilisé');
       }
     }
 
     // Mettre à jour
-    const admin = await this.prisma.admin.update({
-      where: { id: adminId },
+    const user = await this.prisma.user.update({
+      where: { id: userId },
       data: {
         email: data.email,
-        name: data.fullName,
+        name: data.name,
+        phone: data.phone,
       },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
       },
     });
 
-    this.logger.log(`✅ Profil mis à jour: ${adminId}`);
-    return admin;
+    this.logger.log(`✅ Profil mis à jour: ${userId}`);
+    return user;
   }
 
   /**
    * Changer le mot de passe
    */
-  async changePassword(adminId: string, oldPassword: string, newPassword: string) {
-    this.logger.log(`🔐 Changement de mot de passe: ${adminId}`);
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    this.logger.log(`🔐 Changement de mot de passe: ${userId}`);
 
     // Vérifier l'ancien mot de passe
-    const admin = await this.prisma.admin.findUnique({
-      where: { id: adminId },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    if (!admin) {
-      throw new UnauthorizedException('Admin non trouvé');
+    if (!user) {
+      throw new UnauthorizedException('User non trouvé');
     }
 
-    const isPasswordValid = await this.comparePassword(oldPassword, admin.password);
+    const isPasswordValid = await this.comparePassword(oldPassword, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Ancien mot de passe incorrect');
     }
@@ -395,28 +402,28 @@ export class AuthService {
     const hashedPassword = await this.hashPassword(newPassword);
 
     // Mettre à jour
-    await this.prisma.admin.update({
-      where: { id: adminId },
+    await this.prisma.user.update({
+      where: { id: userId },
       data: { password: hashedPassword },
     });
 
-    this.logger.log(`✅ Mot de passe changé: ${adminId}`);
+    this.logger.log(`✅ Mot de passe changé: ${userId}`);
     return { message: 'Mot de passe changé avec succès' };
   }
 
   /**
    * Supprimer le compte (soft delete)
    */
-  async deleteAccount(adminId: string) {
-    this.logger.log(`🗑️ Suppression compte: ${adminId}`);
+  async deleteAccount(userId: string) {
+    this.logger.log(`🗑️ Suppression compte: ${userId}`);
 
     // Soft delete (désactiver le compte)
-    await this.prisma.admin.update({
-      where: { id: adminId },
+    await this.prisma.user.update({
+      where: { id: userId },
       data: { isActive: false },
     });
 
-    this.logger.log(`✅ Compte désactivé: ${adminId}`);
+    this.logger.log(`✅ Compte désactivé: ${userId}`);
     return { message: 'Compte supprimé avec succès' };
   }
 }

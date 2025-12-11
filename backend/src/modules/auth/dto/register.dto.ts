@@ -1,9 +1,5 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsEnum } from 'class-validator';
-
-export enum AdminRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  MODERATOR = 'MODERATOR',
-}
+import { IsEmail, IsString, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
+import { UserType } from '@prisma/client';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'Email invalide' })
@@ -18,6 +14,10 @@ export class RegisterDto {
   @MaxLength(100)
   name: string;
 
-  @IsEnum(AdminRole, { message: 'Rôle invalide' })
-  role: AdminRole;
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsEnum(UserType, { message: 'Type utilisateur invalide' })
+  userType: UserType;
 }

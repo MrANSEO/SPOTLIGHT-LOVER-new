@@ -19,21 +19,22 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   async validate(payload: JwtPayload) {
-    const admin = await this.prisma.admin.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
+        userType: true,
         isActive: true,
       },
     });
 
-    if (!admin || !admin.isActive) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Accès non autorisé');
     }
 
-    return admin;
+    return user;
   }
 }
