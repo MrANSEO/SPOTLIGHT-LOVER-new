@@ -483,7 +483,7 @@ export class UsersService {
     }
 
     if (adminId) {
-      where.adminId = adminId;
+      where.userId = adminId; // adminId représente maintenant un userId de type ADMIN
     }
 
     const [logs, total] = await Promise.all([
@@ -493,7 +493,7 @@ export class UsersService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          admin: {
+          user: {
             select: {
               email: true,
               name: true,
@@ -509,7 +509,7 @@ export class UsersService {
         id: log.id,
         type: log.action,
         message: `${log.action} sur ${log.entityType} ${log.entityId}`,
-        user: log.admin.email,
+        user: log.user.email,
         timestamp: log.createdAt,
       })),
       meta: {

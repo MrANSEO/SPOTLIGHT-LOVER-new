@@ -1,9 +1,15 @@
-import { IsString, IsInt, Min, Max, MaxLength, IsUrl, IsOptional, Matches } from 'class-validator';
+import { IsString, IsInt, Min, Max, MaxLength, IsUrl, IsOptional, Matches, IsEmail, IsPhoneNumber } from 'class-validator';
 
 export class CreateCandidateDto {
   @IsString({ message: 'Le nom est requis' })
   @MaxLength(100, { message: 'Le nom ne doit pas dépasser 100 caractères' })
   name: string;
+
+  @IsEmail({}, { message: 'Email invalide' })
+  email: string;
+
+  @IsPhoneNumber(null, { message: 'Numéro de téléphone invalide' })
+  phone: string;
 
   @IsInt({ message: 'L\'âge doit être un nombre entier' })
   @Min(18, { message: 'L\'âge minimum est 18 ans' })

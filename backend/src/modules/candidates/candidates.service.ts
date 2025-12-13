@@ -35,10 +35,22 @@ export class CandidatesService {
       }
     }
 
-    // Créer le candidat avec status PENDING
+    // 1. Créer un User avec userType=CANDIDATE
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        name: dto.name,
+        phone: dto.phone,
+        userType: 'CANDIDATE',
+        password: '', // Pas de mot de passe pour l'inscription candidat (utilise lien magique/email)
+        isActive: true,
+      },
+    });
+
+    // 2. Créer le candidat avec status PENDING
     const candidate = await this.prisma.candidate.create({
       data: {
-        name: dto.name,
+        userId: user.id,
         age: dto.age,
         country: dto.country,
         city: dto.city,
@@ -55,6 +67,16 @@ export class CandidatesService {
         status: CandidateStatus.PENDING,
         ipAddress,
         userAgent,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
       },
     });
 
@@ -81,9 +103,11 @@ export class CandidatesService {
     }
 
     if (search) {
-      where.name = {
-        contains: search,
-        mode: 'insensitive',
+      where.user = {
+        name: {
+          contains: search,
+          mode: 'insensitive',
+        },
       };
     }
 
@@ -104,7 +128,6 @@ export class CandidatesService {
         take,
         select: {
           id: true,
-          name: true,
           age: true,
           country: true,
           city: true,
@@ -121,6 +144,14 @@ export class CandidatesService {
           shareCount: true,
           rank: true,
           createdAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
         },
       }),
       this.prisma.candidate.count({ where }),
@@ -149,7 +180,6 @@ export class CandidatesService {
       where: { id },
       select: {
         id: true,
-        name: true,
         age: true,
         country: true,
         city: true,
@@ -172,6 +202,14 @@ export class CandidatesService {
         rejectionReason: true,
         createdAt: true,
         updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
       },
     });
 
@@ -279,12 +317,12 @@ export class CandidatesService {
     // Créer un log d'audit
     await this.prisma.auditLog.create({
       data: {
-        adminId,
+        userId: adminId, // adminId représente un userId de type ADMIN
         action: logAction,
         entityType: 'Candidate',
         entityId: id,
-        oldData: { status: candidate.status },
-        newData: { status: newStatus, reason: dto.reason },
+        oldData: JSON.stringify({ status: candidate.status }),
+        newData: JSON.stringify({ status: newStatus, reason: dto.reason }),
         ipAddress: adminIp || 'unknown',
       },
     });

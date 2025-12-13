@@ -107,10 +107,44 @@ export class VotesService {
         paymentProvider = 'unknown';
     }
 
-    // 6. Créer le vote avec statut PENDING
+    // 6. Créer ou récupérer l'utilisateur votant (userType=USER)
+    let voterId: string | undefined;
+    
+    if (phone || email) {
+      // Rechercher un utilisateur existant avec ce phone ou email
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            phone ? { phone } : undefined,
+            email ? { email } : undefined,
+          ].filter(Boolean),
+          userType: 'USER',
+        },
+      });
+
+      if (existingUser) {
+        voterId = existingUser.id;
+      } else {
+        // Créer un nouvel utilisateur votant
+        const newUser = await this.prisma.user.create({
+          data: {
+            email: email || `voter_${Date.now()}@spotlightlover.cm`,
+            name: voterName || 'Votant Anonyme',
+            phone,
+            userType: 'USER',
+            password: '', // Pas de mot de passe pour les votants simples
+            isActive: true,
+          },
+        });
+        voterId = newUser.id;
+      }
+    }
+
+    // 7. Créer le vote avec statut PENDING
     const vote = await this.prisma.vote.create({
       data: {
         candidateId,
+        voterId, // Association avec User
         amount: this.VOTE_AMOUNT,
         currency: 'XOF',
         paymentMethod,
@@ -130,6 +164,14 @@ export class VotesService {
             name: true,
             videoUrl: true,
             thumbnailUrl: true,
+          },
+        },
+        voter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
           },
         },
       },
@@ -167,6 +209,14 @@ export class VotesService {
               thumbnailUrl: true,
             },
           },
+          voter: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
         },
       });
 
@@ -174,6 +224,7 @@ export class VotesService {
       await this.prisma.transaction.create({
         data: {
           voteId: vote.id,
+          userId: voterId, // Association avec User
           amount: this.VOTE_AMOUNT,
           currency: 'XOF',
           paymentMethod,
@@ -372,6 +423,14 @@ export class VotesService {
               thumbnailUrl: true,
             },
           },
+          voter: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
           transaction: true,
         },
       }),
@@ -403,6 +462,14 @@ export class VotesService {
             videoUrl: true,
             thumbnailUrl: true,
             status: true,
+          },
+        },
+        voter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
           },
         },
         transaction: true,
