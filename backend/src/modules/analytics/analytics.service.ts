@@ -156,11 +156,15 @@ export class AnalyticsService {
       take: 5,
       select: {
         id: true,
-        name: true,
         country: true,
         totalVotes: true,
         totalRevenue: true,
         thumbnailUrl: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -170,11 +174,15 @@ export class AnalyticsService {
       take: 5,
       select: {
         id: true,
-        name: true,
         country: true,
         status: true,
         createdAt: true,
         thumbnailUrl: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -350,10 +358,14 @@ export class AnalyticsService {
       take: 5,
       select: {
         id: true,
-        name: true,
         country: true,
         viewCount: true,
         thumbnailUrl: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -364,9 +376,13 @@ export class AnalyticsService {
       take: 5,
       select: {
         id: true,
-        name: true,
         country: true,
         shareCount: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
         thumbnailUrl: true,
       },
     });

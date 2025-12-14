@@ -49,7 +49,6 @@ export class LeaderboardService {
       take: limit,
       select: {
         id: true,
-        name: true,
         country: true,
         city: true,
         videoUrl: true,
@@ -58,6 +57,11 @@ export class LeaderboardService {
         totalRevenue: true,
         viewCount: true,
         shareCount: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -70,7 +74,7 @@ export class LeaderboardService {
       return {
         rank: index + 1,
         candidateId: candidate.id,
-        name: candidate.name,
+        name: candidate.user.name,
         country: candidate.country,
         city: candidate.city,
         videoUrl: candidate.videoUrl,
@@ -177,7 +181,6 @@ export class LeaderboardService {
       take: limit,
       select: {
         id: true,
-        name: true,
         country: true,
         city: true,
         videoUrl: true,
@@ -186,13 +189,18 @@ export class LeaderboardService {
         totalRevenue: true,
         viewCount: true,
         shareCount: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
     return candidates.map((candidate, index) => ({
       rank: index + 1,
       candidateId: candidate.id,
-      name: candidate.name,
+      name: candidate.user.name,
       country: candidate.country,
       city: candidate.city,
       videoUrl: candidate.videoUrl,

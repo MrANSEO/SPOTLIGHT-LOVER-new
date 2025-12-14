@@ -161,9 +161,13 @@ export class VotesService {
         candidate: {
           select: {
             id: true,
-            name: true,
             videoUrl: true,
             thumbnailUrl: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
         voter: {
@@ -204,7 +208,11 @@ export class VotesService {
           candidate: {
             select: {
               id: true,
-              name: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
               videoUrl: true,
               thumbnailUrl: true,
             },
@@ -418,7 +426,11 @@ export class VotesService {
           candidate: {
             select: {
               id: true,
-              name: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
               videoUrl: true,
               thumbnailUrl: true,
             },
@@ -458,7 +470,11 @@ export class VotesService {
         candidate: {
           select: {
             id: true,
-            name: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
             videoUrl: true,
             thumbnailUrl: true,
             status: true,

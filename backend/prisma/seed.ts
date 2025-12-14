@@ -9,43 +9,58 @@ async function main() {
   // Hasher le mot de passe
   const hashedPassword = await bcrypt.hash('Admin123!', 10);
 
-  // Créer un admin SUPER_ADMIN par défaut
-  const superAdmin = await prisma.admin.upsert({
+  // 1. Créer un SUPER ADMIN (User avec userType='ADMIN')
+  const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@spotlightlover.com' },
     update: {},
     create: {
       email: 'admin@spotlightlover.com',
       password: hashedPassword,
       name: 'Admin Principal',
-      role: 'SUPER_ADMIN',
+      userType: 'ADMIN',
       isActive: true,
     },
   });
 
-  console.log('✅ SUPER_ADMIN créé:', superAdmin.email);
+  console.log('✅ SUPER ADMIN créé:', superAdmin.email);
 
-  // Créer un moderator par défaut
-  const moderator = await prisma.admin.upsert({
+  // 2. Créer un MODERATOR (User avec userType='MODERATOR')
+  const moderator = await prisma.user.upsert({
     where: { email: 'moderator@spotlightlover.com' },
     update: {},
     create: {
       email: 'moderator@spotlightlover.com',
       password: hashedPassword,
       name: 'Modérateur',
-      role: 'MODERATOR',
+      userType: 'MODERATOR',
       isActive: true,
     },
   });
 
   console.log('✅ MODERATOR créé:', moderator.email);
 
-  // Créer quelques candidats de test
+  // 3. Créer des candidats de test (User + Candidate)
+  
+  // Candidat 1: Alice Kouadio
+  const user1 = await prisma.user.upsert({
+    where: { email: 'alice.kouadio@example.cm' },
+    update: {},
+    create: {
+      email: 'alice.kouadio@example.cm',
+      name: 'Alice Kouadio',
+      phone: '+225 07 01 02 03 04',
+      userType: 'CANDIDATE',
+      password: '',
+      isActive: true,
+    },
+  });
+
   const candidate1 = await prisma.candidate.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000001',
-      name: 'Alice Kouadio',
+      userId: user1.id,
       age: 24,
       country: 'Côte d\'Ivoire',
       city: 'Abidjan',
@@ -59,6 +74,22 @@ async function main() {
       totalVotes: 150,
       totalRevenue: 15000,
       viewCount: 1200,
+      validatedAt: new Date(),
+      validatedBy: superAdmin.id,
+    },
+  });
+
+  // Candidat 2: Mamadou Diallo
+  const user2 = await prisma.user.upsert({
+    where: { email: 'mamadou.diallo@example.sn' },
+    update: {},
+    create: {
+      email: 'mamadou.diallo@example.sn',
+      name: 'Mamadou Diallo',
+      phone: '+221 77 123 45 67',
+      userType: 'CANDIDATE',
+      password: '',
+      isActive: true,
     },
   });
 
@@ -67,7 +98,7 @@ async function main() {
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000002',
-      name: 'Mamadou Diallo',
+      userId: user2.id,
       age: 27,
       country: 'Sénégal',
       city: 'Dakar',
@@ -80,6 +111,22 @@ async function main() {
       totalVotes: 230,
       totalRevenue: 23000,
       viewCount: 2100,
+      validatedAt: new Date(),
+      validatedBy: superAdmin.id,
+    },
+  });
+
+  // Candidat 3: Fatou Ndiaye
+  const user3 = await prisma.user.upsert({
+    where: { email: 'fatou.ndiaye@example.cm' },
+    update: {},
+    create: {
+      email: 'fatou.ndiaye@example.cm',
+      name: 'Fatou Ndiaye',
+      phone: '+237 6 77 88 99 00',
+      userType: 'CANDIDATE',
+      password: '',
+      isActive: true,
     },
   });
 
@@ -88,7 +135,7 @@ async function main() {
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000003',
-      name: 'Fatou Ndiaye',
+      userId: user3.id,
       age: 22,
       country: 'Cameroun',
       city: 'Douala',
@@ -101,18 +148,31 @@ async function main() {
       totalVotes: 89,
       totalRevenue: 8900,
       viewCount: 890,
+      validatedAt: new Date(),
+      validatedBy: superAdmin.id,
     },
   });
 
-  console.log('✅ Candidats de test créés:', [candidate1.name, candidate2.name, candidate3.name]);
+  // Candidat 4: En attente (PENDING)
+  const user4 = await prisma.user.upsert({
+    where: { email: 'koffi.mensah@example.tg' },
+    update: {},
+    create: {
+      email: 'koffi.mensah@example.tg',
+      name: 'Koffi Mensah',
+      phone: '+228 90 11 22 33',
+      userType: 'CANDIDATE',
+      password: '',
+      isActive: true,
+    },
+  });
 
-  // Créer un candidat en attente
   const pendingCandidate = await prisma.candidate.upsert({
     where: { id: '00000000-0000-0000-0000-000000000004' },
     update: {},
     create: {
       id: '00000000-0000-0000-0000-000000000004',
-      name: 'Koffi Mensah',
+      userId: user4.id,
       age: 25,
       country: 'Togo',
       city: 'Lomé',
@@ -127,15 +187,20 @@ async function main() {
     },
   });
 
-  console.log('✅ Candidat PENDING créé:', pendingCandidate.name);
+  console.log('✅ Candidats de test créés:', [
+    user1.name,
+    user2.name,
+    user3.name,
+    user4.name + ' (PENDING)',
+  ]);
 
   console.log('');
   console.log('🎉 Seed terminé avec succès !');
   console.log('');
-  console.log('📧 Comptes admin créés :');
-  console.log('   Email: admin@spotlightlover.com');
-  console.log('   Email: moderator@spotlightlover.com');
-  console.log('   Password: Admin123!');
+  console.log('📧 Comptes créés :');
+  console.log('   👤 SUPER ADMIN: admin@spotlightlover.com / Admin123!');
+  console.log('   👤 MODERATOR: moderator@spotlightlover.com / Admin123!');
+  console.log('   🎭 Candidats: 4 (3 APPROVED, 1 PENDING)');
   console.log('');
 }
 
