@@ -43,6 +43,13 @@ export class VotesService {
     // 1. Vérifier que le candidat existe et est APPROVED
     const candidate = await this.prisma.candidate.findUnique({
       where: { id: candidateId },
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!candidate) {
@@ -194,7 +201,7 @@ export class VotesService {
           customerPhone: phone,
           customerEmail: email,
           customerName: voterName,
-          description: `Vote pour ${candidate.name}`,
+          description: `Vote pour ${candidate.user.name}`,
         },
       );
 
@@ -232,7 +239,6 @@ export class VotesService {
       await this.prisma.transaction.create({
         data: {
           voteId: vote.id,
-          userId: voterId, // Association avec User
           amount: this.VOTE_AMOUNT,
           currency: 'XOF',
           paymentMethod,
@@ -336,20 +342,20 @@ export class VotesService {
       });
 
       this.logger.log(
-        `Vote confirmé avec succès: ${vote.id} pour le candidat ${vote.candidate.name}`,
+        `Vote confirmé avec succès: ${vote.id} pour le candidat`,
       );
 
-      // 6. Déclencher la mise à jour du leaderboard en temps réel
-      if (this.leaderboardGateway && this.leaderboardGateway.triggerUpdate) {
-        try {
-          await this.leaderboardGateway.triggerUpdate();
-          this.logger.debug('⚡ Leaderboard mis à jour en temps réel');
-        } catch (error) {
-          this.logger.warn(
-            `Impossible de mettre à jour le leaderboard: ${error.message}`,
-          );
-        }
-      }
+      // 6. Déclencher la mise à jour du leaderboard en temps réel (désactivé pour l'instant)
+      // if (this.leaderboardGateway && this.leaderboardGateway.triggerUpdate) {
+      //   try {
+      //     await this.leaderboardGateway.triggerUpdate();
+      //     this.logger.debug('⚡ Leaderboard mis à jour en temps réel');
+      //   } catch (error) {
+      //     this.logger.warn(
+      //       `Impossible de mettre à jour le leaderboard: ${error.message}`,
+      //     );
+      //   }
+      // }
     }
 
     return updatedVote;

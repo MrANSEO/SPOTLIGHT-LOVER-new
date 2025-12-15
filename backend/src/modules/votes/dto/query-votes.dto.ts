@@ -6,8 +6,10 @@ import {
   IsInt,
   Min,
   IsDateString,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentMethod, PaymentStatus } from '@prisma/client';
 
 /**
  * DTO pour la requête de votes avec filtres, tri et pagination
@@ -26,16 +28,16 @@ export class QueryVotesDto {
    * @example "MTN_MOBILE_MONEY"
    */
   @IsOptional()
-  @IsIn(['MTN_MOBILE_MONEY', 'ORANGE_MONEY', 'MOOV_MONEY', 'WAVE', 'CARD'])
-  paymentMethod?: string;
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 
   /**
    * Filtrer par statut de paiement
    * @example "COMPLETED"
    */
   @IsOptional()
-  @IsIn(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'])
-  paymentStatus?: string;
+  @IsEnum(PaymentStatus)
+  paymentStatus?: PaymentStatus;
 
   /**
    * Filtrer par numéro de téléphone

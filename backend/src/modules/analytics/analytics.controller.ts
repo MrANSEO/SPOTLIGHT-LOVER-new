@@ -169,6 +169,18 @@ export class AnalyticsController {
     // Pour simplifier, on génère manuellement le CSV
     
     const votes = await this.analyticsService['prisma'].vote.findMany({
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       include: {
         candidate: {
           select: {
@@ -185,7 +197,7 @@ export class AnalyticsController {
 
     votes.forEach((vote) => {
       csv += `${vote.id},`;
-      csv += `"${vote.candidate.name}",`;
+      csv += `"${vote.candidate.user.name}",`;
       csv += `${vote.candidate.country},`;
       csv += `${vote.amount},`;
       csv += `${vote.paymentMethod},`;
@@ -211,7 +223,7 @@ export class AnalyticsController {
 
     candidates.forEach((candidate) => {
       csv += `${candidate.id},`;
-      csv += `"${candidate.name}",`;
+      csv += `"${candidate.user.name}",`;
       csv += `${candidate.age},`;
       csv += `${candidate.country},`;
       csv += `${candidate.city},`;
@@ -232,6 +244,22 @@ export class AnalyticsController {
   private async generateTransactionsCSV(): Promise<string> {
     const transactions =
       await this.analyticsService['prisma'].transaction.findMany({
+        include: {
+          vote: {
+            include: {
+              candidate: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         include: {
           vote: {
             include: {

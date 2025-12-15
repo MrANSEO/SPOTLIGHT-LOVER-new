@@ -317,7 +317,7 @@ export class CandidatesService {
     // Créer un log d'audit
     await this.prisma.auditLog.create({
       data: {
-        userId: adminId, // adminId représente un userId de type ADMIN
+        adminId: adminId, // adminId représente un userId de type ADMIN
         action: logAction,
         entityType: 'Candidate',
         entityId: id,
@@ -388,7 +388,7 @@ export class CandidatesService {
     return {
       candidate: {
         id: candidate.id,
-        name: candidate.name,
+        name: candidate.user.name,
         totalVotes: candidate.totalVotes,
         totalRevenue: candidate.totalRevenue,
         viewCount: candidate.viewCount,
@@ -414,13 +414,17 @@ export class CandidatesService {
       take: limit,
       select: {
         id: true,
-        name: true,
         country: true,
         city: true,
         thumbnailUrl: true,
         totalVotes: true,
         totalRevenue: true,
         rank: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
   }

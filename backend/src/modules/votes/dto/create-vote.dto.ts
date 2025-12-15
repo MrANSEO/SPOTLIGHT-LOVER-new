@@ -7,7 +7,9 @@ import {
   IsPhoneNumber,
   IsEmail,
   MaxLength,
+  IsEnum,
 } from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
 /**
  * DTO pour la création d'un vote
@@ -26,9 +28,9 @@ export class CreateVoteDto {
    * Méthode de paiement choisie
    * @example "MTN_MOBILE_MONEY"
    */
-  @IsIn(['MTN_MOBILE_MONEY', 'ORANGE_MONEY', 'MOOV_MONEY', 'WAVE', 'CARD'])
+  @IsEnum(PaymentMethod)
   @IsNotEmpty()
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
 
   /**
    * Numéro de téléphone du votant
