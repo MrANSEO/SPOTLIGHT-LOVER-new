@@ -5,6 +5,7 @@ import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ValidateCandidateDto, ValidationAction } from './dto/validate-candidate.dto';
 import { QueryCandidatesDto } from './dto/query-candidates.dto';
 import { CandidateStatus } from './enums/candidate-status.enum';
+import { CandidateStatus } from 'src/types/enums';
 
 @Injectable()
 export class CandidatesService {

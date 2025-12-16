@@ -1,6 +1,6 @@
 import { IsString, IsEmail, IsOptional, IsBoolean, IsIn, IsEnum } from 'class-validator';
+import { UserType } from 'src/types/enums';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { UserType } from '@prisma/client';
 
 /**
  * DTO pour la mise à jour d'un user

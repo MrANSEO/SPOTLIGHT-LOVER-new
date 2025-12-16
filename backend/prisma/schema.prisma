@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -20,7 +20,7 @@ model User {
   password        String
   name            String
   phone           String?   // Pour votes Mobile Money
-  userType        UserType  @default(USER) // USER, CANDIDATE, ADMIN, MODERATOR
+  userType        String    @default("USER") // USER, CANDIDATE, ADMIN, MODERATOR
 
   // 2FA (Two-Factor Authentication)
   twoFactorSecret String?  @map("two_factor_secret")
@@ -44,12 +44,7 @@ model User {
   @@map("users")
 }
 
-enum UserType {
-  USER          // Utilisateur simple (vote seulement)
-  CANDIDATE     // Candidat (paye 500 FCFA pour s'inscrire, publie vidéos)
-  ADMIN         // Super admin (accès complet)
-  MODERATOR     // Modérateur (valide candidats, gère signalements)
-}
+// UserType: USER | CANDIDATE | ADMIN | MODERATOR
 
 // ==============================================
 // MODÈLE CANDIDAT (lié à un User)
@@ -62,7 +57,7 @@ model Candidate {
   age             Int
   country         String
   city            String
-  bio             String    @db.VarChar(200)
+  bio             String    
   
   // Vidéo
   videoUrl        String    @map("video_url")
@@ -78,7 +73,7 @@ model Candidate {
   youtubeHandle   String?   @map("youtube_handle")
 
   // Statut
-  status          CandidateStatus @default(PENDING)
+  status          String          @default("PENDING")
   validatedAt     DateTime?       @map("validated_at")
   validatedBy     String?         @map("validated_by") // User.id (admin)
   rejectionReason String?         @map("rejection_reason")
@@ -110,12 +105,7 @@ model Candidate {
   @@map("candidates")
 }
 
-enum CandidateStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  SUSPENDED
-}
+// CandidateStatus: PENDING | APPROVED | REJECTED | SUSPENDED
 
 // ==============================================
 // MODÈLE VOTE
@@ -139,11 +129,11 @@ model Vote {
   // Paiement
   amount          Int           @default(100) // 100 FCFA
   currency        String        @default("XOF")
-  paymentMethod   PaymentMethod @map("payment_method")
+  paymentMethod   String        @map("payment_method")
   paymentProvider String        @map("payment_provider") // "mtn", "orange", "stripe"
   transactionId   String        @unique @map("transaction_id")
   providerTxId    String?       @unique @map("provider_tx_id")
-  paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")
+  paymentStatus   String        @default("PENDING") @map("payment_status")
 
   // Sécurité
   ipAddress       String        @map("ip_address")
@@ -168,22 +158,9 @@ model Vote {
   @@map("votes")
 }
 
-enum PaymentMethod {
-  MTN_MOBILE_MONEY
-  ORANGE_MONEY
-  MOOV_MONEY
-  WAVE
-  CARD
-}
+// PaymentMethod: MTN_MOBILE_MONEY | ORANGE_MONEY | MOOV_MONEY | WAVE | CARD
 
-enum PaymentStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-  REFUNDED
-}
+// PaymentStatus: PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED | REFUNDED
 
 // ==============================================
 // MODÈLE TRANSACTION
@@ -194,14 +171,14 @@ model Transaction {
   vote              Vote          @relation(fields: [voteId], references: [id], onDelete: Cascade)
   amount            Int
   currency          String        @default("XOF")
-  paymentMethod     PaymentMethod @map("payment_method")
+  paymentMethod     String        @map("payment_method")
   provider          String
   providerReference String        @unique @map("provider_reference")
-  status            PaymentStatus @default(PENDING)
+  status            String        @default("PENDING")
   failureReason     String?       @map("failure_reason")
-  initResponse      Json?         @map("init_response")
-  webhookPayload    Json?         @map("webhook_payload")
-  statusResponse    Json?         @map("status_response")
+  initResponse      String?       @map("init_response")
+  webhookPayload    String?       @map("webhook_payload")
+  statusResponse    String?       @map("status_response")
   customerEmail     String?       @map("customer_email")
   customerPhone     String?       @map("customer_phone")
   customerName      String?       @map("customer_name")
@@ -230,9 +207,9 @@ model AuditLog {
   action        String
   entityType    String   @map("entity_type")
   entityId      String   @map("entity_id")
-  oldData       Json?    @map("old_data")
-  newData       Json?    @map("new_data")
-  details       Json?
+  oldData       String?  @map("old_data")
+  newData       String?  @map("new_data")
+  details       String?
   ipAddress     String   @map("ip_address")
   userAgent     String?  @map("user_agent")
   createdAt     DateTime @default(now()) @map("created_at")
@@ -249,7 +226,7 @@ model AuditLog {
 // ==============================================
 model DailyStats {
   id                    String    @id @default(uuid())
-  date                  DateTime  @unique @db.Date
+  date                  DateTime  @unique 
   totalCandidates       Int       @default(0) @map("total_candidates")
   newCandidates         Int       @default(0) @map("new_candidates")
   totalVotes            Int       @default(0) @map("total_votes")
@@ -262,7 +239,7 @@ model DailyStats {
   mtnRevenue            Int       @default(0) @map("mtn_revenue")
   orangeRevenue         Int       @default(0) @map("orange_revenue")
   cardRevenue           Int       @default(0) @map("card_revenue")
-  topCountries          Json?     @map("top_countries")
+  topCountries          String?   @map("top_countries")
   avgVotesPerCandidate  Float?    @map("avg_votes_per_candidate")
   topCandidateId        String?   @map("top_candidate_id")
   topCandidateVotes     Int?      @map("top_candidate_votes")
@@ -278,8 +255,8 @@ model WebhookLog {
   id            String   @id @default(uuid())
   provider      String
   event         String
-  payload       Json
-  headers       Json?
+  payload       String
+  headers       String?
   processed     Boolean  @default(false)
   processedAt   DateTime? @map("processed_at")
   error         String?

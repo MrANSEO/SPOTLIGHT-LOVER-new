@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PaymentStatus, CandidateStatus, PaymentMethod } from 'src/types/enums';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PaymentStatus, CandidateStatus, PaymentMethod } from '@prisma/client';
 
 export interface DashboardStats {
   overview: {

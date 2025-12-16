@@ -3,6 +3,7 @@ import { MtnMomoProvider } from './providers/mtn.provider';
 import { OrangeMoneyProvider } from './providers/orange.provider';
 import { StripeProvider } from './providers/stripe.provider';
 import { MeSombProvider } from './providers/mesomb.provider';
+import { PaymentMethod } from 'src/types/enums';
 import {
   IPaymentProvider,
   InitPaymentParams,

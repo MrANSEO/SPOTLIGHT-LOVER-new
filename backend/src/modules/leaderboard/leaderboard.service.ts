@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { CandidateStatus } from 'src/types/enums';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CandidateStatus } from '@prisma/client';
 
 export interface LeaderboardEntry {
   rank: number;

@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateVoteDto, QueryVotesDto } from './dto';
+import { CandidateStatus, PaymentMethod, PaymentStatus } from 'src/types/enums';
 import {
   PaymentMethod,
   PaymentStatus,

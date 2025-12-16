@@ -8,8 +8,8 @@ import {
   IsDateString,
   IsEnum,
 } from 'class-validator';
+import { PaymentMethod, PaymentStatus } from 'src/types/enums';
 import { Type } from 'class-transformer';
-import { PaymentMethod, PaymentStatus } from '@prisma/client';
 
 /**
  * DTO pour la requête de votes avec filtres, tri et pagination

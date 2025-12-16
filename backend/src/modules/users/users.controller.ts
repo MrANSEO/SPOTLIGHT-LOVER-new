@@ -11,11 +11,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { UserType } from 'src/types/enums';
 import { UsersService } from './users.service';
 // import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 // import { RolesGuard } from '../auth/guards/roles.guard';
 // import { Roles } from '../auth/decorators/roles.decorator';
-import { UserType } from '@prisma/client';
 import {
   ApiTags,
   ApiOperation,

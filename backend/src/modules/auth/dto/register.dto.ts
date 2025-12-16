@@ -1,5 +1,5 @@
 import { IsEmail, IsString, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
-import { UserType } from '@prisma/client';
+import { UserType } from 'src/types/enums';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'Email invalide' })

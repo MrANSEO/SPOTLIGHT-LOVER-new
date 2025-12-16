@@ -9,11 +9,11 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { PaymentStatus, PaymentMethod } from 'src/types/enums';
 import { VotesService } from './votes.service';
 import { PaymentsService } from '../payments/payments.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { MtnWebhookDto, OrangeWebhookDto, StripeWebhookDto, MeSombWebhookDto } from './dto';
-import { PaymentStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Controller('webhooks')

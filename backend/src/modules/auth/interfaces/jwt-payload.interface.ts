@@ -1,4 +1,4 @@
-import { UserType } from '@prisma/client';
+import { UserType } from 'src/types/enums';
 
 export interface JwtPayload {
   sub: string; // User ID

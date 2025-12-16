@@ -1,8 +1,8 @@
 import { Injectable, Logger, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
+import { UserType } from 'src/types/enums';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';

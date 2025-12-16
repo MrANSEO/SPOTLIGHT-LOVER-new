@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { UserType } from 'src/types/enums';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SystemSettingsDto } from './dto/system-settings.dto';
-import { UserType } from '@prisma/client';
 
 /**
  * Service Users (Admin)

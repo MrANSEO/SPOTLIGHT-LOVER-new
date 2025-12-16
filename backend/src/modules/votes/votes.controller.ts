@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { PaymentStatus } from 'src/types/enums';
 
 @Controller('votes')
 export class VotesController {

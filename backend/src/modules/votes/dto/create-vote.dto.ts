@@ -9,7 +9,7 @@ import {
   MaxLength,
   IsEnum,
 } from 'class-validator';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod } from 'src/types/enums';
 
 /**
  * DTO pour la création d'un vote
