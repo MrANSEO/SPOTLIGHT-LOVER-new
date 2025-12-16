@@ -169,23 +169,16 @@ export class AnalyticsController {
     // Pour simplifier, on génère manuellement le CSV
     
     const votes = await this.analyticsService['prisma'].vote.findMany({
-        include: {
-          candidate: {
-            select: {
-              id: true,
-              user: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
       include: {
         candidate: {
           select: {
-            name: true,
+            id: true,
             country: true,
+            user: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -197,8 +190,8 @@ export class AnalyticsController {
 
     votes.forEach((vote) => {
       csv += `${vote.id},`;
-      csv += `"${vote.candidate.user.name}",`;
-      csv += `${vote.candidate.country},`;
+      csv += `"${vote.candidate?.user?.name || 'N/A'}",`;
+      csv += `${vote.candidate?.country || 'N/A'},`;
       csv += `${vote.amount},`;
       csv += `${vote.paymentMethod},`;
       csv += `${vote.paymentStatus},`;
@@ -215,6 +208,13 @@ export class AnalyticsController {
    */
   private async generateCandidatesCSV(): Promise<string> {
     const candidates = await this.analyticsService['prisma'].candidate.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
       orderBy: { totalVotes: 'desc' },
     });
 
@@ -260,17 +260,6 @@ export class AnalyticsController {
             },
           },
         },
-        include: {
-          vote: {
-            include: {
-              candidate: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
         orderBy: { initiatedAt: 'desc' },
         take: 10000,
       });
@@ -280,7 +269,7 @@ export class AnalyticsController {
 
     transactions.forEach((tx) => {
       csv += `${tx.id},`;
-      csv += `"${tx.vote?.candidate?.name || 'N/A'}",`;
+      csv += `"${tx.vote?.candidate?.user?.name || 'N/A'}",`;
       csv += `${tx.amount},`;
       csv += `${tx.currency},`;
       csv += `${tx.paymentMethod},`;
