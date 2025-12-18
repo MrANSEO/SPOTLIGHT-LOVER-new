@@ -1,9 +1,10 @@
-import { UserType } from 'src/types/enums';
+// Note: userType est 'string' (de SQLite) et non UserType enum
+// Les valeurs possibles: 'USER' | 'CANDIDATE' | 'ADMIN' | 'MODERATOR'
 
 export interface JwtPayload {
   sub: string; // User ID
   email: string;
-  userType: UserType;
+  userType: string; // SQLite retourne string
   iat?: number;
   exp?: number;
 }
@@ -19,7 +20,7 @@ export interface AuthResponse {
     email: string;
     name: string;
     phone?: string;
-    userType: UserType;
+    userType: string; // SQLite retourne string
   };
   tokens: JwtTokens;
   requires2FA?: boolean;

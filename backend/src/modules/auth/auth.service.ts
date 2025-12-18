@@ -304,7 +304,7 @@ export class AuthService {
   /**
    * Générer les tokens JWT (access + refresh)
    */
-  private async generateTokens(user: { id: string; email: string; name?: string; userType: UserType }): Promise<JwtTokens> {
+  private async generateTokens(user: { id: string; email: string; name?: string; userType: string }): Promise<JwtTokens> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,

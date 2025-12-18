@@ -54,7 +54,7 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
   async getAllUsers(
     @Query('search') search?: string,
-    @Query('userType') userType?: UserType,
+    @Query('userType') userType?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -114,7 +114,7 @@ export class UsersController {
   @Put(':id/type')
   @ApiOperation({ summary: 'Changer le type d\'utilisateur (USER, CANDIDATE, ADMIN, MODERATOR)' })
   @ApiResponse({ status: 200, description: 'Type modifié' })
-  async changeUserType(@Param('id') id: string, @Body('userType') userType: UserType) {
+  async changeUserType(@Param('id') id: string, @Body('userType') userType: string) {
     return this.usersService.updateUser(id, { userType });
   }
 

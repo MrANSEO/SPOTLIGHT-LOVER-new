@@ -24,7 +24,7 @@ export class UpdateUserDto {
   @ApiPropertyOptional({ enum: UserType, example: UserType.USER })
   @IsEnum(UserType)
   @IsOptional()
-  userType?: UserType;
+  userType?: string; // 'USER' | 'CANDIDATE' | 'ADMIN' | 'MODERATOR'
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()

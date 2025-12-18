@@ -19,5 +19,5 @@ export class RegisterDto {
   phone?: string;
 
   @IsEnum(UserType, { message: 'Type utilisateur invalide' })
-  userType: UserType;
+  userType: string; // 'USER' | 'CANDIDATE' | 'ADMIN' | 'MODERATOR'
 }

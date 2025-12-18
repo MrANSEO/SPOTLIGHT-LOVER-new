@@ -21,7 +21,7 @@ export class UsersService {
     page: number = 1,
     limit: number = 20,
     search?: string,
-    userType?: UserType,
+    userType?: string,
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};

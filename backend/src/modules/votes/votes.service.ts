@@ -11,12 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateVoteDto, QueryVotesDto } from './dto';
 import { CandidateStatus, PaymentMethod, PaymentStatus } from 'src/types/enums';
-import {
-  PaymentMethod,
-  PaymentStatus,
-  CandidateStatus,
-  Prisma,
-} from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class VotesService {
