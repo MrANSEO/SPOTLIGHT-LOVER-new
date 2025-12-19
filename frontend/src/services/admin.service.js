@@ -6,7 +6,7 @@ import api from './api';
 class AdminService {
   // ========== DASHBOARD ==========
   async getDashboardStats() {
-    const response = await api.get('/admin/dashboard');
+    const response = await api.get('/admin/users/dashboard/stats');
     return response.data;
   }
 
@@ -55,27 +55,24 @@ class AdminService {
     if (status) params.append('status', status);
     if (category) params.append('category', category);
     
-    const response = await api.get(`/admin/candidates?${params.toString()}`);
+    const response = await api.get(`/admin/users/candidates/all?${params.toString()}`);
     return response.data;
   }
 
   async approveCandidate(candidateId) {
-    const response = await api.patch(`/admin/candidates/${candidateId}/status`, { 
-      status: 'APPROVED' 
-    });
+    const response = await api.put(`/admin/users/candidates/${candidateId}/approve`);
     return response.data;
   }
 
   async rejectCandidate(candidateId, reason) {
-    const response = await api.patch(`/admin/candidates/${candidateId}/status`, { 
-      status: 'REJECTED',
+    const response = await api.put(`/admin/users/candidates/${candidateId}/reject`, { 
       rejectionReason: reason
     });
     return response.data;
   }
 
   async deleteCandidate(candidateId) {
-    const response = await api.delete(`/admin/candidates/${candidateId}`);
+    const response = await api.delete(`/admin/users/candidates/${candidateId}`);
     return response.data;
   }
 
@@ -86,12 +83,12 @@ class AdminService {
     params.append('limit', limit);
     if (status) params.append('status', status);
     
-    const response = await api.get(`/admin/votes?${params.toString()}`);
+    const response = await api.get(`/admin/users/votes/all?${params.toString()}`);
     return response.data;
   }
 
   async getVoteById(voteId) {
-    const response = await api.get(`/admin/votes/${voteId}`);
+    const response = await api.get(`/admin/users/votes/${voteId}`);
     return response.data;
   }
 
@@ -118,12 +115,12 @@ class AdminService {
 
   // ========== SETTINGS ==========
   async getSystemSettings() {
-    const response = await api.get('/admin/settings');
+    const response = await api.get('/admin/users/settings/all');
     return response.data;
   }
 
   async updateSystemSettings(settings) {
-    const response = await api.put('/admin/settings', settings);
+    const response = await api.put('/admin/users/settings', settings);
     return response.data;
   }
 
@@ -135,7 +132,7 @@ class AdminService {
     if (action) params.append('action', action);
     if (userId) params.append('userId', userId);
     
-    const response = await api.get(`/admin/logs?${params.toString()}`);
+    const response = await api.get(`/admin/users/logs/all?${params.toString()}`);
     return response.data;
   }
 
