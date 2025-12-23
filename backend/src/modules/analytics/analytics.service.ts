@@ -162,7 +162,7 @@ export class AnalyticsService {
         thumbnailUrl: true,
         user: {
           select: {
-            name: true,
+            
           },
         },
       },
@@ -180,8 +180,7 @@ export class AnalyticsService {
         thumbnailUrl: true,
         user: {
           select: {
-            name: true,
-          },
+              },
         },
       },
     });
@@ -363,8 +362,7 @@ export class AnalyticsService {
         thumbnailUrl: true,
         user: {
           select: {
-            name: true,
-          },
+              },
         },
       },
     });
@@ -380,8 +378,7 @@ export class AnalyticsService {
         shareCount: true,
         user: {
           select: {
-            name: true,
-          },
+              },
         },
         thumbnailUrl: true,
       },

@@ -72,8 +72,7 @@ export class CandidatesService {
         user: {
           select: {
             id: true,
-            name: true,
-            email: true,
+              email: true,
             phone: true,
           },
         },
@@ -147,8 +146,7 @@ export class CandidatesService {
           user: {
             select: {
               id: true,
-              name: true,
-              email: true,
+                  email: true,
               phone: true,
             },
           },
@@ -205,8 +203,7 @@ export class CandidatesService {
         user: {
           select: {
             id: true,
-            name: true,
-            email: true,
+              email: true,
             phone: true,
           },
         },
@@ -422,8 +419,7 @@ export class CandidatesService {
         rank: true,
         user: {
           select: {
-            name: true,
-          },
+            },
         },
       },
     });

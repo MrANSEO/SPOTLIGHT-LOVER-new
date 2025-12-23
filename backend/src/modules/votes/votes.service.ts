@@ -42,7 +42,6 @@ export class VotesService {
       include: {
         user: {
           select: {
-            name: true,
           },
         },
       },
@@ -146,6 +145,7 @@ export class VotesService {
     // 7. Créer le vote avec statut PENDING
     const vote = await this.prisma.vote.create({
       data: {
+        voterId: '00000000-0000-0000-0000-000000000000', // ID voter temporaire
         candidateId,
         voterId, // Association avec User
         amount: this.VOTE_AMOUNT,
@@ -168,15 +168,13 @@ export class VotesService {
             thumbnailUrl: true,
             user: {
               select: {
-                name: true,
-              },
+                  },
             },
           },
         },
         voter: {
           select: {
             id: true,
-            name: true,
             email: true,
             phone: true,
           },
@@ -213,8 +211,7 @@ export class VotesService {
               id: true,
             user: {
               select: {
-                name: true,
-              },
+                  },
             },
               videoUrl: true,
               thumbnailUrl: true,
@@ -223,8 +220,7 @@ export class VotesService {
           voter: {
             select: {
               id: true,
-              name: true,
-              email: true,
+                email: true,
               phone: true,
             },
           },
@@ -430,8 +426,7 @@ export class VotesService {
               id: true,
             user: {
               select: {
-                name: true,
-              },
+                  },
             },
               videoUrl: true,
               thumbnailUrl: true,
@@ -440,8 +435,7 @@ export class VotesService {
           voter: {
             select: {
               id: true,
-              name: true,
-              email: true,
+                email: true,
               phone: true,
             },
           },
@@ -474,8 +468,7 @@ export class VotesService {
             id: true,
             user: {
               select: {
-                name: true,
-              },
+                  },
             },
             videoUrl: true,
             thumbnailUrl: true,
@@ -485,7 +478,6 @@ export class VotesService {
         voter: {
           select: {
             id: true,
-            name: true,
             email: true,
             phone: true,
           },
