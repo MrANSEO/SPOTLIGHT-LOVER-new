@@ -42,6 +42,9 @@ export class VotesService {
       include: {
         user: {
           select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
       },
@@ -145,9 +148,8 @@ export class VotesService {
     // 7. Créer le vote avec statut PENDING
     const vote = await this.prisma.vote.create({
       data: {
-        voterId: '00000000-0000-0000-0000-000000000000', // ID voter temporaire
-        candidateId,
         voterId, // Association avec User
+        candidateId,
         amount: this.VOTE_AMOUNT,
         currency: 'XOF',
         paymentMethod,
@@ -168,7 +170,10 @@ export class VotesService {
             thumbnailUrl: true,
             user: {
               select: {
-                  },
+                id: true,
+                name: true,
+                email: true,
+              },
             },
           },
         },
@@ -211,7 +216,10 @@ export class VotesService {
               id: true,
             user: {
               select: {
-                  },
+                id: true,
+                name: true,
+                email: true,
+              },
             },
               videoUrl: true,
               thumbnailUrl: true,
@@ -426,7 +434,10 @@ export class VotesService {
               id: true,
             user: {
               select: {
-                  },
+                id: true,
+                name: true,
+                email: true,
+              },
             },
               videoUrl: true,
               thumbnailUrl: true,
@@ -468,7 +479,10 @@ export class VotesService {
             id: true,
             user: {
               select: {
-                  },
+                id: true,
+                name: true,
+                email: true,
+              },
             },
             videoUrl: true,
             thumbnailUrl: true,

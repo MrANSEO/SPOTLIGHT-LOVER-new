@@ -72,7 +72,8 @@ export class CandidatesService {
         user: {
           select: {
             id: true,
-              email: true,
+            name: true,
+            email: true,
             phone: true,
           },
         },
@@ -203,7 +204,8 @@ export class CandidatesService {
         user: {
           select: {
             id: true,
-              email: true,
+            name: true,
+            email: true,
             phone: true,
           },
         },
