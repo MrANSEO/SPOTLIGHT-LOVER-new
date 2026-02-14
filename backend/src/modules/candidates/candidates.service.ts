@@ -18,6 +18,21 @@ export class CandidatesService {
   async create(dto: CreateCandidateDto, ipAddress?: string, userAgent?: string) {
     this.logger.log(`📝 Nouvelle inscription candidat: ${dto.name}`);
 
+    const candidateSettings = await this.getCandidateSettings();
+
+    if (!candidateSettings.registrationEnabled) {
+      throw new BadRequestException('Les inscriptions candidat sont temporairement fermées');
+    }
+
+    if (
+      dto.videoDuration &&
+      dto.videoDuration > candidateSettings.maxVideoDurationSeconds
+    ) {
+      throw new BadRequestException(
+        `La durée vidéo maximale autorisée est ${candidateSettings.maxVideoDurationSeconds} secondes`,
+      );
+    }
+
     // Vérifier si l'IP est blacklistée
     if (ipAddress) {
       const isBlacklisted = await this.prisma.ipBlacklist.findFirst({
@@ -83,6 +98,58 @@ export class CandidatesService {
     this.logger.log(`✅ Candidat créé avec succès: ${candidate.id}`);
 
     return candidate;
+  }
+
+  private async getCandidateSettings(): Promise<{
+    registrationEnabled: boolean;
+    maxVideoDurationSeconds: number;
+    candidateRegistrationFee: number;
+  }> {
+    const defaults = {
+      registrationEnabled: true,
+      maxVideoDurationSeconds: 90,
+      candidateRegistrationFee: 500,
+    };
+
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ key: string; value: string }>>`
+        SELECT key, value
+        FROM system_settings
+        WHERE key IN ('registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee')
+      `;
+
+      if (rows.length === 0) {
+        return defaults;
+      }
+
+      const map = new Map(rows.map((row) => [row.key, row.value]));
+      const registrationEnabledRaw = map.get('registrationEnabled');
+      const durationRaw = map.get('maxVideoDurationSeconds');
+      const registrationFeeRaw = map.get('candidateRegistrationFee');
+
+      const parsedDuration = durationRaw ? Number(durationRaw) : defaults.maxVideoDurationSeconds;
+      const parsedFee = registrationFeeRaw ? Number(registrationFeeRaw) : defaults.candidateRegistrationFee;
+
+      return {
+        registrationEnabled:
+          registrationEnabledRaw === undefined
+            ? defaults.registrationEnabled
+            : registrationEnabledRaw === 'true',
+        maxVideoDurationSeconds:
+          Number.isNaN(parsedDuration) || parsedDuration < 30
+            ? defaults.maxVideoDurationSeconds
+            : parsedDuration,
+        candidateRegistrationFee:
+          Number.isNaN(parsedFee) || parsedFee < 100
+            ? defaults.candidateRegistrationFee
+            : parsedFee,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de charger la configuration candidat: ${error.message}`,
+      );
+      return defaults;
+    }
   }
 
   /**
