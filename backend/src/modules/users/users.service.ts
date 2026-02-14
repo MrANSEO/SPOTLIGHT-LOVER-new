@@ -4,12 +4,38 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SystemSettingsDto } from './dto/system-settings.dto';
 
+
+interface SystemSettings {
+  votePrice: number;
+  candidateRegistrationFee: number;
+  maxVideoDurationSeconds: number;
+  maintenanceMode: boolean;
+  registrationEnabled: boolean;
+  votingEnabled: boolean;
+  autoApproval: boolean;
+  platformFee: number;
+}
+
 /**
  * Service Users (Admin)
  * Gestion des users, candidats, votes, statistiques
  */
 @Injectable()
 export class UsersService {
+  private readonly defaultSystemSettings: SystemSettings = {
+    votePrice: 100,
+    candidateRegistrationFee: 500,
+    maxVideoDurationSeconds: 90,
+    maintenanceMode: false,
+    registrationEnabled: true,
+    votingEnabled: true,
+    autoApproval: false,
+    platformFee: 0.1,
+  };
+
+  private systemSettings: SystemSettings = { ...this.defaultSystemSettings };
+  private settingsLoaded = false;
+
   constructor(private prisma: PrismaService) {}
 
   // ========== GESTION USERS ==========
@@ -439,16 +465,90 @@ export class UsersService {
    * Paramètres système
    */
   async getSystemSettings() {
-    return {
-      votePrice: 100,
-      maintenanceMode: false,
-      registrationEnabled: true,
-      autoApproval: false,
-    };
+    await this.loadSystemSettings();
+    return this.systemSettings;
   }
 
   async updateSystemSettings(settings: SystemSettingsDto) {
-    return settings;
+    await this.loadSystemSettings();
+
+    this.systemSettings = {
+      ...this.systemSettings,
+      ...settings,
+    };
+
+    await this.persistSystemSettings();
+
+    return this.systemSettings;
+  }
+
+  private async loadSystemSettings() {
+    if (this.settingsLoaded) {
+      return;
+    }
+
+    await this.ensureSystemSettingsTable();
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ key: string; value: string }>
+    >`SELECT key, value FROM system_settings`;
+
+    if (rows.length > 0) {
+      const fromDb = rows.reduce((acc, row) => {
+        acc[row.key] = this.parseSettingValue(row.value);
+        return acc;
+      }, {} as Record<string, string | number | boolean>);
+
+      this.systemSettings = {
+        ...this.defaultSystemSettings,
+        ...(fromDb as Partial<SystemSettings>),
+      };
+    } else {
+      await this.persistSystemSettings();
+    }
+
+    this.settingsLoaded = true;
+  }
+
+  private async persistSystemSettings() {
+    await this.ensureSystemSettingsTable();
+
+    for (const [key, value] of Object.entries(this.systemSettings)) {
+      await this.prisma.$executeRaw`
+        INSERT INTO system_settings(key, value, updated_at)
+        VALUES (${key}, ${String(value)}, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = datetime('now')
+      `;
+    }
+  }
+
+  private async ensureSystemSettingsTable() {
+    await this.prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT
+      )
+    `);
+  }
+
+  private parseSettingValue(raw: string): string | number | boolean {
+    if (raw === 'true') {
+      return true;
+    }
+
+    if (raw === 'false') {
+      return false;
+    }
+
+    const asNumber = Number(raw);
+    if (!Number.isNaN(asNumber) && raw.trim() !== '') {
+      return asNumber;
+    }
+
+    return raw;
   }
 
   /**
