@@ -5,12 +5,16 @@ import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ValidateCandidateDto, ValidationAction } from './dto/validate-candidate.dto';
 import { QueryCandidatesDto } from './dto/query-candidates.dto';
 import { CandidateStatus } from 'src/types/enums';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class CandidatesService {
   private readonly logger = new Logger(CandidatesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   /**
    * Créer un nouveau candidat (inscription publique)
@@ -88,7 +92,7 @@ export class CandidatesService {
               phone: dto.phone,
               userType: 'CANDIDATE',
               password: '', // Parcours candidature publique
-              isActive: true,
+              isActive: false,
             },
           });
 
@@ -127,11 +131,103 @@ export class CandidatesService {
 
     this.logger.log(`✅ Candidat créé avec succès: ${candidate.id}`);
 
+    const payment = await this.initializeRegistrationPayment(candidate.id);
+
     return {
       ...candidate,
       registrationFeeDue: candidateSettings.candidateRegistrationFee,
-      registrationPaymentStatus: 'PENDING',
+      registrationPaymentStatus: payment.success ? 'PROCESSING' : 'PENDING',
+      registrationPayment: payment,
     };
+  }
+
+
+  async initializeRegistrationPayment(candidateId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException('Candidat introuvable');
+    }
+
+    const candidateSettings = await this.getCandidateSettings();
+    const reference = `REG-${candidate.id}-${Date.now()}`;
+
+    const paymentResult = await this.paymentsService.initializePayment('mesomb', {
+      amount: candidateSettings.candidateRegistrationFee,
+      currency: 'XAF',
+      reference,
+      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback`,
+      webhookUrl: `${process.env.API_URL || 'http://localhost:4000'}/webhooks/mesomb`,
+      customerPhone: candidate.user.phone || undefined,
+      customerEmail: candidate.user.email || undefined,
+      customerName: candidate.user.name,
+      description: `Inscription candidat ${candidate.user.name}`,
+    });
+
+    return {
+      success: paymentResult.success,
+      reference,
+      providerReference: paymentResult.providerReference,
+      message: paymentResult.message,
+      data: paymentResult.data,
+    };
+  }
+
+
+  async confirmRegistrationPayment(candidateId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      include: {
+        user: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException('Candidat introuvable');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: candidate.userId },
+        data: { isActive: true },
+      });
+
+      return tx.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: CandidateStatus.APPROVED,
+          validatedAt: new Date(),
+          validatedBy: 'SYSTEM_PAYMENT',
+          rejectionReason: null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+            },
+          },
+        },
+      });
+    });
+
+    return updated;
   }
 
   private async getCandidateSettings(): Promise<{
