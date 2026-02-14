@@ -4,7 +4,7 @@ import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ValidateCandidateDto, ValidationAction } from './dto/validate-candidate.dto';
 import { QueryCandidatesDto } from './dto/query-candidates.dto';
-import { CandidateStatus } from 'src/types/enums';
+import { CandidateStatus, PaymentStatus } from 'src/types/enums';
 import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
@@ -164,6 +164,8 @@ export class CandidatesService {
     const candidateSettings = await this.getCandidateSettings();
     const reference = `REG-${candidate.id}-${Date.now()}`;
 
+    await this.ensureRegistrationPaymentsTable();
+
     const paymentResult = await this.paymentsService.initializePayment('mesomb', {
       amount: candidateSettings.candidateRegistrationFee,
       currency: 'XAF',
@@ -175,6 +177,16 @@ export class CandidatesService {
       customerName: candidate.user.name,
       description: `Inscription candidat ${candidate.user.name}`,
     });
+
+    await this.prisma.$executeRaw`
+      INSERT INTO candidate_registration_payments(reference, candidate_id, amount, status, provider_reference, payload, updated_at)
+      VALUES (${reference}, ${candidate.id}, ${candidateSettings.candidateRegistrationFee}, ${paymentResult.success ? 'PENDING' : 'FAILED'}, ${paymentResult.providerReference || null}, ${JSON.stringify(paymentResult.data || {})}, datetime('now'))
+      ON CONFLICT(reference) DO UPDATE SET
+        status = excluded.status,
+        provider_reference = excluded.provider_reference,
+        payload = excluded.payload,
+        updated_at = datetime('now')
+    `;
 
     return {
       success: paymentResult.success,
@@ -198,6 +210,10 @@ export class CandidatesService {
 
     if (!candidate) {
       throw new NotFoundException('Candidat introuvable');
+    }
+
+    if (candidate.status === CandidateStatus.APPROVED && candidate.user?.id) {
+      return candidate;
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -228,6 +244,58 @@ export class CandidatesService {
     });
 
     return updated;
+  }
+
+  async confirmRegistrationPaymentByReference(
+    reference: string,
+    status: PaymentStatus,
+    webhookPayload?: unknown,
+  ) {
+    await this.ensureRegistrationPaymentsTable();
+
+    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string }>>`
+      SELECT candidate_id
+      FROM candidate_registration_payments
+      WHERE reference = ${reference}
+      LIMIT 1
+    `;
+
+    if (!records.length) {
+      this.logger.warn(`Aucun paiement inscription trouvé pour référence ${reference}`);
+      return null;
+    }
+
+    const candidateId = records[0].candidate_id;
+
+    await this.prisma.$executeRaw`
+      UPDATE candidate_registration_payments
+      SET status = ${status},
+          payload = ${JSON.stringify(webhookPayload || {})},
+          updated_at = datetime('now')
+      WHERE reference = ${reference}
+    `;
+
+    if (status !== PaymentStatus.COMPLETED) {
+      return null;
+    }
+
+    return this.confirmRegistrationPayment(candidateId);
+  }
+
+  private async ensureRegistrationPaymentsTable() {
+    await this.prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS candidate_registration_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT UNIQUE NOT NULL,
+        candidate_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        provider_reference TEXT,
+        payload TEXT,
+        updated_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
   }
 
   private async getCandidateSettings(): Promise<{

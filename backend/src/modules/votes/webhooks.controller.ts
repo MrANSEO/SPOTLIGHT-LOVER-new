@@ -86,12 +86,11 @@ export class WebhooksController {
       const reference = webhookDto.reference || webhookDto.pk;
 
       if (this.isCandidateRegistrationReference(reference)) {
-        if (paymentStatus === PaymentStatus.COMPLETED) {
-          const candidateId = this.extractCandidateIdFromReference(reference);
-          if (candidateId) {
-            await this.candidatesService.confirmRegistrationPayment(candidateId);
-          }
-        }
+        await this.candidatesService.confirmRegistrationPaymentByReference(
+          reference,
+          paymentStatus,
+          webhookDto,
+        );
       } else {
         await this.votesService.confirmPayment(reference, paymentStatus, webhookDto);
       }
@@ -127,18 +126,6 @@ export class WebhooksController {
     return Boolean(reference && reference.startsWith('REG-'));
   }
 
-  private extractCandidateIdFromReference(reference?: string): string | null {
-    if (!reference) {
-      return null;
-    }
-
-    const parts = reference.split('-');
-    if (parts.length < 3) {
-      return null;
-    }
-
-    return parts.slice(1, -1).join('-') || null;
-  }
 
   /**
    * Webhook MTN Mobile Money (LEGACY - conservé pour compatibilité)
