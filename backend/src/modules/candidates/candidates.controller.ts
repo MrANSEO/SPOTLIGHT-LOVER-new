@@ -95,6 +95,21 @@ export class CandidatesController {
     };
   }
 
+
+  /**
+   * Consulter le statut d'un paiement d'inscription par référence (PUBLIC)
+   */
+  @Public()
+  @Get('registration-payment/:reference')
+  async getRegistrationPaymentStatus(@Param('reference') reference: string) {
+    const status = await this.candidatesService.getRegistrationPaymentStatusByReference(reference);
+
+    return {
+      success: true,
+      data: status,
+    };
+  }
+
   /**
    * Lister les candidats (PUBLIC - seulement APPROVED)
    * Admin peut voir tous les statuts

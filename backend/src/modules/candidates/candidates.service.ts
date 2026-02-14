@@ -170,7 +170,7 @@ export class CandidatesService {
       amount: candidateSettings.candidateRegistrationFee,
       currency: 'XAF',
       reference,
-      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback`,
+      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback?reference=${reference}`,
       webhookUrl: `${process.env.API_URL || 'http://localhost:4000'}/webhooks/mesomb`,
       customerPhone: candidate.user.phone || undefined,
       customerEmail: candidate.user.email || undefined,
@@ -296,6 +296,34 @@ export class CandidatesService {
         created_at TEXT DEFAULT (datetime('now'))
       )
     `);
+  }
+
+
+  async getRegistrationPaymentStatusByReference(reference: string) {
+    await this.ensureRegistrationPaymentsTable();
+
+    const records = await this.prisma.$queryRaw<
+      Array<{
+        reference: string;
+        candidate_id: string;
+        amount: number;
+        status: string;
+        provider_reference: string | null;
+        updated_at: string | null;
+        created_at: string | null;
+      }>
+    >`
+      SELECT reference, candidate_id, amount, status, provider_reference, updated_at, created_at
+      FROM candidate_registration_payments
+      WHERE reference = ${reference}
+      LIMIT 1
+    `;
+
+    if (!records.length) {
+      throw new NotFoundException('Référence de paiement introuvable');
+    }
+
+    return records[0];
   }
 
   private async getCandidateSettings(): Promise<{
