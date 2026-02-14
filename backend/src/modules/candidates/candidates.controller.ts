@@ -11,6 +11,7 @@ import {
   Req,
   Logger,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -92,6 +93,25 @@ export class CandidatesController {
       success: true,
       message: 'Paiement confirmé, compte candidat activé',
       data: candidate,
+    };
+  }
+
+
+  /**
+   * Consulter le statut d'un paiement d'inscription par référence (PUBLIC)
+   */
+  @Public()
+  @Get('registration-payment/:reference')
+  async getRegistrationPaymentStatus(@Param('reference') reference: string) {
+    if (!reference.startsWith('REG-')) {
+      throw new BadRequestException('Référence de paiement invalide');
+    }
+
+    const status = await this.candidatesService.getRegistrationPaymentStatusByReference(reference);
+
+    return {
+      success: true,
+      data: status,
     };
   }
 

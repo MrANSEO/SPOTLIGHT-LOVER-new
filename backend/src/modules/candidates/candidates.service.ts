@@ -4,7 +4,7 @@ import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ValidateCandidateDto, ValidationAction } from './dto/validate-candidate.dto';
 import { QueryCandidatesDto } from './dto/query-candidates.dto';
-import { CandidateStatus } from 'src/types/enums';
+import { CandidateStatus, PaymentStatus } from 'src/types/enums';
 import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
@@ -164,17 +164,29 @@ export class CandidatesService {
     const candidateSettings = await this.getCandidateSettings();
     const reference = `REG-${candidate.id}-${Date.now()}`;
 
+    await this.ensureRegistrationPaymentsTable();
+
     const paymentResult = await this.paymentsService.initializePayment('mesomb', {
       amount: candidateSettings.candidateRegistrationFee,
       currency: 'XAF',
       reference,
-      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback`,
+      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback?reference=${reference}`,
       webhookUrl: `${process.env.API_URL || 'http://localhost:4000'}/webhooks/mesomb`,
       customerPhone: candidate.user.phone || undefined,
       customerEmail: candidate.user.email || undefined,
       customerName: candidate.user.name,
       description: `Inscription candidat ${candidate.user.name}`,
     });
+
+    await this.prisma.$executeRaw`
+      INSERT INTO candidate_registration_payments(reference, candidate_id, amount, status, provider_reference, payload, updated_at)
+      VALUES (${reference}, ${candidate.id}, ${candidateSettings.candidateRegistrationFee}, ${paymentResult.success ? 'PENDING' : 'FAILED'}, ${paymentResult.providerReference || null}, ${JSON.stringify(paymentResult.data || {})}, datetime('now'))
+      ON CONFLICT(reference) DO UPDATE SET
+        status = excluded.status,
+        provider_reference = excluded.provider_reference,
+        payload = excluded.payload,
+        updated_at = datetime('now')
+    `;
 
     return {
       success: paymentResult.success,
@@ -198,6 +210,10 @@ export class CandidatesService {
 
     if (!candidate) {
       throw new NotFoundException('Candidat introuvable');
+    }
+
+    if (candidate.status === CandidateStatus.APPROVED && candidate.user?.id) {
+      return candidate;
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -230,56 +246,121 @@ export class CandidatesService {
     return updated;
   }
 
-  private async getCandidateSettings(): Promise<{
-    registrationEnabled: boolean;
-    maxVideoDurationSeconds: number;
-    candidateRegistrationFee: number;
-  }> {
-    const defaults = {
-      registrationEnabled: true,
-      maxVideoDurationSeconds: 90,
-      candidateRegistrationFee: 500,
-    };
+  async confirmRegistrationPaymentByReference(
+    reference: string,
+    status: PaymentStatus,
+    webhookPayload?: unknown,
+  ) {
+    let normalizedStatus = status;
+    await this.ensureRegistrationPaymentsTable();
 
-    try {
-      const rows = await this.prisma.$queryRaw<Array<{ key: string; value: string }>>`
-        SELECT key, value
-        FROM system_settings
-        WHERE key IN ('registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee')
-      `;
+    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string; status: string; provider_reference: string | null }>>`
+      SELECT candidate_id, status, provider_reference
+      FROM candidate_registration_payments
+      WHERE reference = ${reference}
+      LIMIT 1
+    `;
 
-      if (rows.length === 0) {
-        return defaults;
-      }
-
-      const map = new Map(rows.map((row) => [row.key, row.value]));
-      const registrationEnabledRaw = map.get('registrationEnabled');
-      const durationRaw = map.get('maxVideoDurationSeconds');
-      const registrationFeeRaw = map.get('candidateRegistrationFee');
-
-      const parsedDuration = durationRaw ? Number(durationRaw) : defaults.maxVideoDurationSeconds;
-      const parsedFee = registrationFeeRaw ? Number(registrationFeeRaw) : defaults.candidateRegistrationFee;
-
-      return {
-        registrationEnabled:
-          registrationEnabledRaw === undefined
-            ? defaults.registrationEnabled
-            : registrationEnabledRaw === 'true',
-        maxVideoDurationSeconds:
-          Number.isNaN(parsedDuration) || parsedDuration < 30
-            ? defaults.maxVideoDurationSeconds
-            : parsedDuration,
-        candidateRegistrationFee:
-          Number.isNaN(parsedFee) || parsedFee < 100
-            ? defaults.candidateRegistrationFee
-            : parsedFee,
-      };
-    } catch (error) {
-      this.logger.warn(
-        `Impossible de charger la configuration candidat: ${error.message}`,
-      );
-      return defaults;
+    if (!records.length) {
+      this.logger.warn(`Aucun paiement inscription trouvé pour référence ${reference}`);
+      return null;
     }
+
+    const candidateId = records[0].candidate_id;
+    const currentStatus = (records[0].status || '').toUpperCase();
+    const providerReference = records[0].provider_reference;
+
+    // Idempotence : ne pas repasser un paiement déjà complété en FAILED/PENDING
+    if (currentStatus === 'COMPLETED' && normalizedStatus !== PaymentStatus.COMPLETED) {
+      return this.confirmRegistrationPayment(candidateId);
+    }
+
+    // Vérification provider avant activation finale (best-effort)
+    if (normalizedStatus === PaymentStatus.COMPLETED && providerReference) {
+      try {
+        const providerStatus = await this.paymentsService.getTransactionStatus(
+          'mesomb',
+          providerReference,
+        );
+
+        if (providerStatus.status !== 'completed') {
+          normalizedStatus = PaymentStatus.FAILED;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Vérification provider impossible pour ${reference}: ${error.message}`,
+        );
+      }
+    }
+
+    await this.prisma.$executeRaw`
+      UPDATE candidate_registration_payments
+      SET status = ${normalizedStatus},
+          payload = ${JSON.stringify(webhookPayload || {})},
+          updated_at = datetime('now')
+      WHERE reference = ${reference}
+    `;
+
+    if (normalizedStatus !== PaymentStatus.COMPLETED) {
+      return null;
+    }
+
+    return this.confirmRegistrationPayment(candidateId);
+  }
+
+  private async ensureRegistrationPaymentsTable() {
+    await this.prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS candidate_registration_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT UNIQUE NOT NULL,
+        candidate_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        provider_reference TEXT,
+        payload TEXT,
+        updated_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
+
+  async getRegistrationPaymentStatusByReference(reference: string) {
+    await this.ensureRegistrationPaymentsTable();
+
+    const records = await this.prisma.$queryRaw<
+      Array<{
+        reference: string;
+        candidate_id: string;
+        amount: number;
+        status: string;
+        provider_reference: string | null;
+        updated_at: string | null;
+        created_at: string | null;
+        candidate_status: string | null;
+        last_payload: string | null;
+      }>
+    >`
+      SELECT p.reference,
+             p.candidate_id,
+             p.amount,
+             p.status,
+             p.provider_reference,
+             p.updated_at,
+             p.created_at,
+             c.status as candidate_status,
+             p.payload as last_payload
+      FROM candidate_registration_payments p
+      LEFT JOIN candidates c ON c.id = p.candidate_id
+      WHERE p.reference = ${reference}
+      LIMIT 1
+    `;
+
+    if (!records.length) {
+      throw new NotFoundException('Référence de paiement introuvable');
+    }
+
+    return records[0];
   }
 
   private async getCandidateSettings(): Promise<{
