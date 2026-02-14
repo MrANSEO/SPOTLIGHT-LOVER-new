@@ -251,10 +251,11 @@ export class CandidatesService {
     status: PaymentStatus,
     webhookPayload?: unknown,
   ) {
+    let normalizedStatus = status;
     await this.ensureRegistrationPaymentsTable();
 
-    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string; status: string }>>`
-      SELECT candidate_id, status
+    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string; status: string; provider_reference: string | null }>>`
+      SELECT candidate_id, status, provider_reference
       FROM candidate_registration_payments
       WHERE reference = ${reference}
       LIMIT 1
@@ -267,21 +268,40 @@ export class CandidatesService {
 
     const candidateId = records[0].candidate_id;
     const currentStatus = (records[0].status || '').toUpperCase();
+    const providerReference = records[0].provider_reference;
 
     // Idempotence : ne pas repasser un paiement déjà complété en FAILED/PENDING
-    if (currentStatus === 'COMPLETED' && status !== PaymentStatus.COMPLETED) {
+    if (currentStatus === 'COMPLETED' && normalizedStatus !== PaymentStatus.COMPLETED) {
       return this.confirmRegistrationPayment(candidateId);
+    }
+
+    // Vérification provider avant activation finale (best-effort)
+    if (normalizedStatus === PaymentStatus.COMPLETED && providerReference) {
+      try {
+        const providerStatus = await this.paymentsService.getTransactionStatus(
+          'mesomb',
+          providerReference,
+        );
+
+        if (providerStatus.status !== 'completed') {
+          normalizedStatus = PaymentStatus.FAILED;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Vérification provider impossible pour ${reference}: ${error.message}`,
+        );
+      }
     }
 
     await this.prisma.$executeRaw`
       UPDATE candidate_registration_payments
-      SET status = ${status},
+      SET status = ${normalizedStatus},
           payload = ${JSON.stringify(webhookPayload || {})},
           updated_at = datetime('now')
       WHERE reference = ${reference}
     `;
 
-    if (status !== PaymentStatus.COMPLETED) {
+    if (normalizedStatus !== PaymentStatus.COMPLETED) {
       return null;
     }
 
@@ -318,6 +338,7 @@ export class CandidatesService {
         updated_at: string | null;
         created_at: string | null;
         candidate_status: string | null;
+        last_payload: string | null;
       }>
     >`
       SELECT p.reference,
@@ -327,7 +348,8 @@ export class CandidatesService {
              p.provider_reference,
              p.updated_at,
              p.created_at,
-             c.status as candidate_status
+             c.status as candidate_status,
+             p.payload as last_payload
       FROM candidate_registration_payments p
       LEFT JOIN candidates c ON c.id = p.candidate_id
       WHERE p.reference = ${reference}
