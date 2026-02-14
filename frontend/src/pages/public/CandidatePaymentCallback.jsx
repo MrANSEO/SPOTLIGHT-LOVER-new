@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -9,7 +9,10 @@ const CandidatePaymentCallback = () => {
   const reference = searchParams.get('reference');
 
   const [status, setStatus] = useState(fallbackStatus);
+  const [candidateStatus, setCandidateStatus] = useState('');
   const [isLoading, setIsLoading] = useState(Boolean(reference));
+
+  const shouldPoll = useMemo(() => Boolean(reference && (status === 'pending' || status === 'processing')), [reference, status]);
 
   useEffect(() => {
     const loadStatus = async () => {
@@ -25,6 +28,7 @@ const CandidatePaymentCallback = () => {
 
         const result = await response.json();
         const paymentStatus = (result?.data?.status || '').toLowerCase();
+        setCandidateStatus((result?.data?.candidate_status || '').toUpperCase());
 
         if (paymentStatus === 'completed' || paymentStatus === 'success') {
           setStatus('completed');
@@ -39,7 +43,14 @@ const CandidatePaymentCallback = () => {
     };
 
     loadStatus();
-  }, [reference]);
+
+    if (!shouldPoll) {
+      return;
+    }
+
+    const interval = setInterval(loadStatus, 5000);
+    return () => clearInterval(interval);
+  }, [reference, shouldPoll]);
 
   const isSuccess = status === 'success' || status === 'completed';
   const isFailed = status === 'failed' || status === 'cancelled';
@@ -53,6 +64,7 @@ const CandidatePaymentCallback = () => {
       {!isLoading && !isSuccess && !isFailed && <p>⏳ Paiement en cours de confirmation. Revenez dans quelques instants.</p>}
 
       {reference && <p>Référence: <strong>{reference}</strong></p>}
+      {candidateStatus && <p>Statut candidat: <strong>{candidateStatus}</strong></p>}
       <p>Si besoin, vous pouvez relancer le paiement depuis votre espace candidat.</p>
       <Link to="/">Retour à l'accueil</Link>
     </div>

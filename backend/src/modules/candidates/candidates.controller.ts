@@ -11,6 +11,7 @@ import {
   Req,
   Logger,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -102,6 +103,10 @@ export class CandidatesController {
   @Public()
   @Get('registration-payment/:reference')
   async getRegistrationPaymentStatus(@Param('reference') reference: string) {
+    if (!reference.startsWith('REG-')) {
+      throw new BadRequestException('Référence de paiement invalide');
+    }
+
     const status = await this.candidatesService.getRegistrationPaymentStatusByReference(reference);
 
     return {

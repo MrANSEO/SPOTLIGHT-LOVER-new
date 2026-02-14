@@ -253,8 +253,8 @@ export class CandidatesService {
   ) {
     await this.ensureRegistrationPaymentsTable();
 
-    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string }>>`
-      SELECT candidate_id
+    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string; status: string }>>`
+      SELECT candidate_id, status
       FROM candidate_registration_payments
       WHERE reference = ${reference}
       LIMIT 1
@@ -266,6 +266,12 @@ export class CandidatesService {
     }
 
     const candidateId = records[0].candidate_id;
+    const currentStatus = (records[0].status || '').toUpperCase();
+
+    // Idempotence : ne pas repasser un paiement déjà complété en FAILED/PENDING
+    if (currentStatus === 'COMPLETED' && status !== PaymentStatus.COMPLETED) {
+      return this.confirmRegistrationPayment(candidateId);
+    }
 
     await this.prisma.$executeRaw`
       UPDATE candidate_registration_payments
@@ -311,11 +317,20 @@ export class CandidatesService {
         provider_reference: string | null;
         updated_at: string | null;
         created_at: string | null;
+        candidate_status: string | null;
       }>
     >`
-      SELECT reference, candidate_id, amount, status, provider_reference, updated_at, created_at
-      FROM candidate_registration_payments
-      WHERE reference = ${reference}
+      SELECT p.reference,
+             p.candidate_id,
+             p.amount,
+             p.status,
+             p.provider_reference,
+             p.updated_at,
+             p.created_at,
+             c.status as candidate_status
+      FROM candidate_registration_payments p
+      LEFT JOIN candidates c ON c.id = p.candidate_id
+      WHERE p.reference = ${reference}
       LIMIT 1
     `;
 
