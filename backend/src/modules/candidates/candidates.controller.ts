@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -53,6 +54,45 @@ export class CandidatesController {
       this.logger.error('❌ Erreur création candidat', error.message);
       throw error;
     }
+  }
+
+
+  /**
+   * Réinitialiser le paiement d'inscription candidat (PUBLIC)
+   */
+  @Public()
+  @Post(':id/registration-payment')
+  async initRegistrationPayment(@Param('id') id: string) {
+    const payment = await this.candidatesService.initializeRegistrationPayment(id);
+
+    return {
+      success: true,
+      message: 'Paiement d'inscription initialisé',
+      data: payment,
+    };
+  }
+
+
+  /**
+   * Confirmer le paiement d'inscription candidat (WEBHOOK/INTERNAL)
+   */
+  @Public()
+  @Post(':id/registration/confirm')
+  async confirmRegistrationPayment(@Param('id') id: string, @Req() req: any) {
+    const secret = req.headers['x-registration-secret'];
+    const expectedSecret = process.env.REGISTRATION_CONFIRM_SECRET || 'dev-registration-secret';
+
+    if (secret !== expectedSecret) {
+      throw new ForbiddenException('Signature de confirmation invalide');
+    }
+
+    const candidate = await this.candidatesService.confirmRegistrationPayment(id);
+
+    return {
+      success: true,
+      message: 'Paiement confirmé, compte candidat activé',
+      data: candidate,
+    };
   }
 
   /**
