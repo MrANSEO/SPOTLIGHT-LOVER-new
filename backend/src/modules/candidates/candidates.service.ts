@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
@@ -18,6 +18,21 @@ export class CandidatesService {
   async create(dto: CreateCandidateDto, ipAddress?: string, userAgent?: string) {
     this.logger.log(`📝 Nouvelle inscription candidat: ${dto.name}`);
 
+    const candidateSettings = await this.getCandidateSettings();
+
+    if (!candidateSettings.registrationEnabled) {
+      throw new BadRequestException('Les inscriptions candidat sont temporairement fermées');
+    }
+
+    if (
+      dto.videoDuration &&
+      dto.videoDuration > candidateSettings.maxVideoDurationSeconds
+    ) {
+      throw new BadRequestException(
+        `La durée vidéo maximale autorisée est ${candidateSettings.maxVideoDurationSeconds} secondes`,
+      );
+    }
+
     // Vérifier si l'IP est blacklistée
     if (ipAddress) {
       const isBlacklisted = await this.prisma.ipBlacklist.findFirst({
@@ -35,54 +50,140 @@ export class CandidatesService {
       }
     }
 
-    // 1. Créer un User avec userType=CANDIDATE
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        name: dto.name,
-        phone: dto.phone,
-        userType: 'CANDIDATE',
-        password: '', // Pas de mot de passe pour l'inscription candidat (utilise lien magique/email)
-        isActive: true,
-      },
-    });
-
-    // 2. Créer le candidat avec status PENDING
-    const candidate = await this.prisma.candidate.create({
-      data: {
-        userId: user.id,
-        age: dto.age,
-        country: dto.country,
-        city: dto.city,
-        bio: dto.bio,
-        videoUrl: dto.videoUrl,
-        videoPublicId: dto.videoPublicId,
-        thumbnailUrl: dto.thumbnailUrl,
-        videoDuration: dto.videoDuration,
-        videoFormat: dto.videoFormat,
-        videoSize: dto.videoSize,
-        instagramHandle: dto.instagramHandle,
-        tiktokHandle: dto.tiktokHandle,
-        youtubeHandle: dto.youtubeHandle,
-        status: CandidateStatus.PENDING,
-        ipAddress,
-        userAgent,
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: dto.email }, { phone: dto.phone }],
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
+        candidate: {
+          select: { id: true },
         },
       },
     });
 
+    if (existingUser?.candidate) {
+      throw new ConflictException('Ce candidat existe déjà');
+    }
+
+    if (existingUser && existingUser.userType !== 'CANDIDATE') {
+      throw new ConflictException(
+        'Un compte utilisateur existe déjà avec cet email ou ce numéro',
+      );
+    }
+
+    // 1 & 2. Créer user + candidat dans une transaction
+    const candidate = await this.prisma.$transaction(async (tx) => {
+      const user = existingUser
+        ? await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: dto.name,
+              userType: 'CANDIDATE',
+            },
+          })
+        : await tx.user.create({
+            data: {
+              email: dto.email,
+              name: dto.name,
+              phone: dto.phone,
+              userType: 'CANDIDATE',
+              password: '', // Parcours candidature publique
+              isActive: true,
+            },
+          });
+
+      return tx.candidate.create({
+        data: {
+          userId: user.id,
+          age: dto.age,
+          country: dto.country,
+          city: dto.city,
+          bio: dto.bio,
+          videoUrl: dto.videoUrl,
+          videoPublicId: dto.videoPublicId,
+          thumbnailUrl: dto.thumbnailUrl,
+          videoDuration: dto.videoDuration,
+          videoFormat: dto.videoFormat,
+          videoSize: dto.videoSize,
+          instagramHandle: dto.instagramHandle,
+          tiktokHandle: dto.tiktokHandle,
+          youtubeHandle: dto.youtubeHandle,
+          status: CandidateStatus.PENDING,
+          ipAddress,
+          userAgent,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      });
+    });
+
     this.logger.log(`✅ Candidat créé avec succès: ${candidate.id}`);
 
-    return candidate;
+    return {
+      ...candidate,
+      registrationFeeDue: candidateSettings.candidateRegistrationFee,
+      registrationPaymentStatus: 'PENDING',
+    };
+  }
+
+  private async getCandidateSettings(): Promise<{
+    registrationEnabled: boolean;
+    maxVideoDurationSeconds: number;
+    candidateRegistrationFee: number;
+  }> {
+    const defaults = {
+      registrationEnabled: true,
+      maxVideoDurationSeconds: 90,
+      candidateRegistrationFee: 500,
+    };
+
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ key: string; value: string }>>`
+        SELECT key, value
+        FROM system_settings
+        WHERE key IN ('registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee')
+      `;
+
+      if (rows.length === 0) {
+        return defaults;
+      }
+
+      const map = new Map(rows.map((row) => [row.key, row.value]));
+      const registrationEnabledRaw = map.get('registrationEnabled');
+      const durationRaw = map.get('maxVideoDurationSeconds');
+      const registrationFeeRaw = map.get('candidateRegistrationFee');
+
+      const parsedDuration = durationRaw ? Number(durationRaw) : defaults.maxVideoDurationSeconds;
+      const parsedFee = registrationFeeRaw ? Number(registrationFeeRaw) : defaults.candidateRegistrationFee;
+
+      return {
+        registrationEnabled:
+          registrationEnabledRaw === undefined
+            ? defaults.registrationEnabled
+            : registrationEnabledRaw === 'true',
+        maxVideoDurationSeconds:
+          Number.isNaN(parsedDuration) || parsedDuration < 30
+            ? defaults.maxVideoDurationSeconds
+            : parsedDuration,
+        candidateRegistrationFee:
+          Number.isNaN(parsedFee) || parsedFee < 100
+            ? defaults.candidateRegistrationFee
+            : parsedFee,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de charger la configuration candidat: ${error.message}`,
+      );
+      return defaults;
+    }
   }
 
   /**
