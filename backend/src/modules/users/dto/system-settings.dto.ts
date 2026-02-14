@@ -5,11 +5,30 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
  * DTO pour les paramètres système
  */
 export class SystemSettingsDto {
-  @ApiPropertyOptional({ example: 500, description: 'Prix du vote en XAF' })
+  @ApiPropertyOptional({ example: 100, description: 'Prix d\'un vote en FCFA' })
   @IsOptional()
   @IsNumber()
   @Min(100)
   votePrice?: number;
+
+  @ApiPropertyOptional({
+    example: 500,
+    description: 'Frais d\'inscription candidat en FCFA',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(100)
+  candidateRegistrationFee?: number;
+
+  @ApiPropertyOptional({
+    example: 90,
+    description: 'Durée max autorisée pour une vidéo candidat (secondes)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(30)
+  @Max(120)
+  maxVideoDurationSeconds?: number;
 
   @ApiPropertyOptional({ example: false, description: 'Mode maintenance activé' })
   @IsOptional()

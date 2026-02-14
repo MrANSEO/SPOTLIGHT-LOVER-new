@@ -5,6 +5,7 @@ import ProtectedRoute, { AdminRoute } from './components/common/ProtectedRoute';
 
 // Pages publiques
 import Home from './pages/public/Home';
+import CandidatePaymentCallback from './pages/public/CandidatePaymentCallback';
 import About from './pages/special/About';
 import Contact from './pages/special/Contact';
 import FAQ from './pages/special/FAQ';
@@ -45,6 +46,7 @@ function App() {
             {/* ============ PAGES PUBLIQUES ============ */}
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
+            <Route path="/candidate/payment-callback" element={<CandidatePaymentCallback />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/legal" element={<Legal />} />
