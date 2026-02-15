@@ -162,45 +162,10 @@ export class CandidatesService {
       throw new NotFoundException('Candidat introuvable');
     }
 
-    if (candidate.status === CandidateStatus.APPROVED) {
-      return {
-        success: true,
-        reference: null,
-        providerReference: null,
-        message: 'Ce candidat est déjà activé',
-        data: { candidateId: candidate.id, status: candidate.status },
-      };
-    }
-
-    const existingPending = await this.prisma.candidateRegistrationPayment.findFirst({
-      where: {
-        candidateId: candidate.id,
-        status: {
-          in: ['PENDING', 'PROCESSING'],
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (existingPending) {
-      return {
-        success: true,
-        reference: existingPending.reference,
-        providerReference: existingPending.providerReference,
-        message: 'Un paiement est déjà en cours pour ce candidat',
-        data: { status: existingPending.status },
-      };
-    }
-
     const candidateSettings = await this.getCandidateSettings();
-
-    if (!candidateSettings.registrationEnabled) {
-      throw new BadRequestException(
-        'Les inscriptions candidat sont temporairement fermées',
-      );
-    }
-
     const reference = `REG-${candidate.id}-${Date.now()}`;
+
+    await this.ensureRegistrationPaymentsTable();
 
     const paymentResult = await this.paymentsService.initializePayment('mesomb', {
       amount: candidateSettings.candidateRegistrationFee,
@@ -214,22 +179,15 @@ export class CandidatesService {
       description: `Inscription candidat ${candidate.user.name}`,
     });
 
-    await this.prisma.candidateRegistrationPayment.upsert({
-      where: { reference },
-      create: {
-        reference,
-        candidateId: candidate.id,
-        amount: candidateSettings.candidateRegistrationFee,
-        status: paymentResult.success ? PaymentStatus.PENDING : PaymentStatus.FAILED,
-        providerReference: paymentResult.providerReference || null,
-        payload: JSON.stringify(paymentResult.data || {}),
-      },
-      update: {
-        status: paymentResult.success ? PaymentStatus.PENDING : PaymentStatus.FAILED,
-        providerReference: paymentResult.providerReference || null,
-        payload: JSON.stringify(paymentResult.data || {}),
-      },
-    });
+    await this.prisma.$executeRaw`
+      INSERT INTO candidate_registration_payments(reference, candidate_id, amount, status, provider_reference, payload, updated_at)
+      VALUES (${reference}, ${candidate.id}, ${candidateSettings.candidateRegistrationFee}, ${paymentResult.success ? 'PENDING' : 'FAILED'}, ${paymentResult.providerReference || null}, ${JSON.stringify(paymentResult.data || {})}, datetime('now'))
+      ON CONFLICT(reference) DO UPDATE SET
+        status = excluded.status,
+        provider_reference = excluded.provider_reference,
+        payload = excluded.payload,
+        updated_at = datetime('now')
+    `;
 
     return {
       success: paymentResult.success,
@@ -289,72 +247,42 @@ export class CandidatesService {
     return updated;
   }
 
-  async confirmRegistrationPaymentByAdmin(
-    candidateId: string,
-    admin: { id?: string; email?: string } | null,
-    metadata?: { ipAddress?: string; userAgent?: string },
-  ) {
-    const updatedCandidate = await this.confirmRegistrationPayment(candidateId);
-
-    if (!admin?.id) {
-      return updatedCandidate;
-    }
-
-    await this.prisma.auditLog.create({
-      data: {
-        adminId: admin.id,
-        action: 'MANUAL_CONFIRM_REGISTRATION_PAYMENT',
-        entityType: 'CANDIDATE',
-        entityId: candidateId,
-        oldData: null,
-        newData: JSON.stringify({ status: updatedCandidate.status, validatedAt: updatedCandidate.validatedAt }),
-        details: `Confirmation manuelle du paiement d'inscription pour ${updatedCandidate.user?.email || candidateId}`,
-        ipAddress: metadata?.ipAddress || 'unknown',
-        userAgent: metadata?.userAgent || null,
-      },
-    });
-
-    return updatedCandidate;
-  }
-
   async confirmRegistrationPaymentByReference(
     reference: string,
     status: PaymentStatus,
     webhookPayload?: unknown,
   ) {
     let normalizedStatus = status;
+    await this.ensureRegistrationPaymentsTable();
 
-    if (!reference.startsWith('REG-')) {
-      this.logger.warn(`Référence invalide ignorée: ${reference}`);
-      return null;
-    }
+    const records = await this.prisma.$queryRaw<Array<{ candidate_id: string; status: string; provider_reference: string | null }>>`
+      SELECT candidate_id, status, provider_reference
+      FROM candidate_registration_payments
+      WHERE reference = ${reference}
+      LIMIT 1
+    `;
 
-    const record = await this.prisma.candidateRegistrationPayment.findUnique({
-      where: { reference },
-      select: {
-        candidateId: true,
-        status: true,
-        providerReference: true,
-      },
-    });
-
-    if (!record) {
+    if (!records.length) {
       this.logger.warn(`Aucun paiement inscription trouvé pour référence ${reference}`);
       return null;
     }
 
-    const currentStatus = (record.status || '').toUpperCase();
+    const candidateId = records[0].candidate_id;
+    const currentStatus = (records[0].status || '').toUpperCase();
+    const providerReference = records[0].provider_reference;
 
     // Idempotence : ne pas repasser un paiement déjà complété en FAILED/PENDING
     if (currentStatus === 'COMPLETED' && normalizedStatus !== PaymentStatus.COMPLETED) {
-      return this.confirmRegistrationPayment(record.candidateId);
+      return this.confirmRegistrationPayment(candidateId);
     }
 
-    if (normalizedStatus === PaymentStatus.COMPLETED && record.providerReference) {
+    // Vérification provider avant activation finale (best-effort).
+    // En cas d'incohérence provider, on garde le paiement en PENDING pour éviter un rejet faux négatif.
+    if (normalizedStatus === PaymentStatus.COMPLETED && providerReference) {
       try {
         const providerStatus = await this.paymentsService.getTransactionStatus(
           'mesomb',
-          record.providerReference,
+          providerReference,
         );
 
         if (providerStatus.status !== 'completed') {
@@ -367,48 +295,74 @@ export class CandidatesService {
       }
     }
 
-    await this.prisma.candidateRegistrationPayment.update({
-      where: { reference },
-      data: {
-        status: normalizedStatus,
-        payload: JSON.stringify(webhookPayload || {}),
-      },
-    });
+    await this.prisma.$executeRaw`
+      UPDATE candidate_registration_payments
+      SET status = ${normalizedStatus},
+          payload = ${JSON.stringify(webhookPayload || {})},
+          updated_at = datetime('now')
+      WHERE reference = ${reference}
+    `;
 
     if (normalizedStatus !== PaymentStatus.COMPLETED) {
       return null;
     }
 
-    return this.confirmRegistrationPayment(record.candidateId);
+    return this.confirmRegistrationPayment(candidateId);
   }
 
-  async getRegistrationPaymentStatusByReference(reference: string) {
-    const record = await this.prisma.candidateRegistrationPayment.findUnique({
-      where: { reference },
-      include: {
-        candidate: {
-          select: {
-            status: true,
-          },
-        },
-      },
-    });
+  private async ensureRegistrationPaymentsTable() {
+    await this.prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS candidate_registration_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT UNIQUE NOT NULL,
+        candidate_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        provider_reference TEXT,
+        payload TEXT,
+        updated_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+  }
 
-    if (!record) {
+
+  async getRegistrationPaymentStatusByReference(reference: string) {
+    await this.ensureRegistrationPaymentsTable();
+
+    const records = await this.prisma.$queryRaw<
+      Array<{
+        reference: string;
+        candidate_id: string;
+        amount: number;
+        status: string;
+        provider_reference: string | null;
+        updated_at: string | null;
+        created_at: string | null;
+        candidate_status: string | null;
+        last_payload: string | null;
+      }>
+    >`
+      SELECT p.reference,
+             p.candidate_id,
+             p.amount,
+             p.status,
+             p.provider_reference,
+             p.updated_at,
+             p.created_at,
+             c.status as candidate_status,
+             p.payload as last_payload
+      FROM candidate_registration_payments p
+      LEFT JOIN candidates c ON c.id = p.candidate_id
+      WHERE p.reference = ${reference}
+      LIMIT 1
+    `;
+
+    if (!records.length) {
       throw new NotFoundException('Référence de paiement introuvable');
     }
 
-    return {
-      reference: record.reference,
-      candidate_id: record.candidateId,
-      amount: record.amount,
-      status: record.status,
-      provider_reference: record.providerReference,
-      updated_at: record.updatedAt,
-      created_at: record.createdAt,
-      candidate_status: record.candidate?.status || null,
-      last_payload: record.payload,
-    };
+    return records[0];
   }
 
   private async getCandidateSettings(): Promise<{
@@ -423,17 +377,11 @@ export class CandidatesService {
     };
 
     try {
-      const rows = await this.prisma.systemSetting.findMany({
-        where: {
-          key: {
-            in: ['registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee'],
-          },
-        },
-        select: {
-          key: true,
-          value: true,
-        },
-      });
+      const rows = await this.prisma.$queryRaw<Array<{ key: string; value: string }>>`
+        SELECT key, value
+        FROM system_settings
+        WHERE key IN ('registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee')
+      `;
 
       if (rows.length === 0) {
         return defaults;
@@ -467,17 +415,6 @@ export class CandidatesService {
       );
       return defaults;
     }
-  }
-
-
-  async getPublicContestSettings() {
-    const candidateSettings = await this.getCandidateSettings();
-
-    return {
-      candidateRegistrationFee: candidateSettings.candidateRegistrationFee,
-      maxVideoDurationSeconds: candidateSettings.maxVideoDurationSeconds,
-      registrationEnabled: candidateSettings.registrationEnabled,
-    };
   }
 
   /**
