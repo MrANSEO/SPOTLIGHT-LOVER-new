@@ -15,6 +15,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { MtnWebhookDto, OrangeWebhookDto, StripeWebhookDto, MeSombWebhookDto } from './dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CandidatesService } from '../candidates/candidates.service';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -24,6 +25,7 @@ export class WebhooksController {
     private readonly votesService: VotesService,
     private readonly paymentsService: PaymentsService,
     private readonly prisma: PrismaService,
+    private readonly candidatesService: CandidatesService,
   ) {}
 
   /**
@@ -81,11 +83,17 @@ export class WebhooksController {
       }
 
       // 4. Confirmer le paiement avec notre référence
-      await this.votesService.confirmPayment(
-        webhookDto.reference || webhookDto.pk,
-        paymentStatus,
-        webhookDto,
-      );
+      const reference = webhookDto.reference || webhookDto.pk;
+
+      if (this.isCandidateRegistrationReference(reference)) {
+        await this.candidatesService.confirmRegistrationPaymentByReference(
+          reference,
+          paymentStatus,
+          webhookDto,
+        );
+      } else {
+        await this.votesService.confirmPayment(reference, paymentStatus, webhookDto);
+      }
 
       return {
         success: true,
@@ -112,6 +120,12 @@ export class WebhooksController {
       };
     }
   }
+
+
+  private isCandidateRegistrationReference(reference?: string): boolean {
+    return Boolean(reference && reference.startsWith('REG-'));
+  }
+
 
   /**
    * Webhook MTN Mobile Money (LEGACY - conservé pour compatibilité)

@@ -44,7 +44,9 @@ export const AdminRoute = ({ children }) => {
   }
 
   // Bloquer si pas ADMIN
-  if (user?.role !== 'ADMIN') {
+  const userRole = user?.role || user?.userType;
+
+  if (userRole !== 'ADMIN') {
     return (
       <div className="access-denied">
         <div className="access-denied-content">
