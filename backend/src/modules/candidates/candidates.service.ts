@@ -289,6 +289,34 @@ export class CandidatesService {
     return updated;
   }
 
+  async confirmRegistrationPaymentByAdmin(
+    candidateId: string,
+    admin: { id?: string; email?: string } | null,
+    metadata?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const updatedCandidate = await this.confirmRegistrationPayment(candidateId);
+
+    if (!admin?.id) {
+      return updatedCandidate;
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        adminId: admin.id,
+        action: 'MANUAL_CONFIRM_REGISTRATION_PAYMENT',
+        entityType: 'CANDIDATE',
+        entityId: candidateId,
+        oldData: null,
+        newData: JSON.stringify({ status: updatedCandidate.status, validatedAt: updatedCandidate.validatedAt }),
+        details: `Confirmation manuelle du paiement d'inscription pour ${updatedCandidate.user?.email || candidateId}`,
+        ipAddress: metadata?.ipAddress || 'unknown',
+        userAgent: metadata?.userAgent || null,
+      },
+    });
+
+    return updatedCandidate;
+  }
+
   async confirmRegistrationPaymentByReference(
     reference: string,
     status: PaymentStatus,

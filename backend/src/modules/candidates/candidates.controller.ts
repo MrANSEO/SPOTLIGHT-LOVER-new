@@ -79,8 +79,15 @@ export class CandidatesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Post(':id/registration/confirm')
-  async confirmRegistrationPayment(@Param('id') id: string, @CurrentUser() admin: any) {
-    const candidate = await this.candidatesService.confirmRegistrationPayment(id);
+  async confirmRegistrationPayment(@Param('id') id: string, @CurrentUser() admin: any, @Req() req: any) {
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    const candidate = await this.candidatesService.confirmRegistrationPaymentByAdmin(
+      id,
+      { id: admin?.id, email: admin?.email },
+      { ipAddress, userAgent },
+    );
 
     return {
       success: true,
