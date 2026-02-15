@@ -81,7 +81,11 @@ export class CandidatesController {
   @Post(':id/registration/confirm')
   async confirmRegistrationPayment(@Param('id') id: string, @Req() req: any) {
     const secret = req.headers['x-registration-secret'];
-    const expectedSecret = process.env.REGISTRATION_CONFIRM_SECRET || 'dev-registration-secret';
+    const expectedSecret = process.env.REGISTRATION_CONFIRM_SECRET;
+
+    if (!expectedSecret) {
+      throw new ForbiddenException('Confirmation inscription désactivée (secret manquant)');
+    }
 
     if (secret !== expectedSecret) {
       throw new ForbiddenException('Signature de confirmation invalide');

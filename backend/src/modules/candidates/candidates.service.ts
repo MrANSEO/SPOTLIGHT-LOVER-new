@@ -200,6 +200,13 @@ export class CandidatesService {
     }
 
     const candidateSettings = await this.getCandidateSettings();
+
+    if (!candidateSettings.registrationEnabled) {
+      throw new BadRequestException(
+        'Les inscriptions candidat sont temporairement fermées',
+      );
+    }
+
     const reference = `REG-${candidate.id}-${Date.now()}`;
 
     const paymentResult = await this.paymentsService.initializePayment('mesomb', {
