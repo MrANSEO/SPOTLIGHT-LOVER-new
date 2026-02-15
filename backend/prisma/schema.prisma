@@ -93,6 +93,7 @@ model Candidate {
   // Relations
   user            User      @relation(name: "UserCandidate", fields: [userId], references: [id], onDelete: Cascade)
   votesReceived   Vote[]    @relation("CandidateVotes")
+  registrationPayments CandidateRegistrationPayment[]
 
   // Timestamps
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -103,6 +104,32 @@ model Candidate {
   @@index([createdAt])
   @@index([country])
   @@map("candidates")
+}
+
+model CandidateRegistrationPayment {
+  id                Int      @id @default(autoincrement())
+  reference         String   @unique
+  candidateId       String   @map("candidate_id")
+  amount            Int
+  status            String
+  providerReference String?  @map("provider_reference")
+  payload           String?
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([status])
+  @@map("candidate_registration_payments")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
 }
 
 // CandidateStatus: PENDING | APPROVED | REJECTED | SUSPENDED

@@ -24,6 +24,9 @@ const Home = () => {
             <Link to="/gallery" className="btn btn-outline btn-lg hover-scale">
               🎬 Voir la galerie
             </Link>
+            <Link to="/become-candidate" className="btn btn-outline btn-lg hover-scale">
+              💳 Devenir candidat (500 FCFA)
+            </Link>
           </div>
         </div>
 
@@ -84,9 +87,14 @@ const Home = () => {
           <p className="cta-description">
             Rejoignez des centaines de créateurs camerounais et mettez en avant votre talent unique !
           </p>
-          <Link to="/register" className="btn btn-primary btn-lg hover-glow">
-            🚀 Créer mon compte gratuitement
-          </Link>
+          <div className="hero-actions">
+            <Link to="/register" className="btn btn-primary btn-lg hover-glow">
+              🚀 Créer mon compte gratuitement
+            </Link>
+            <Link to="/become-candidate" className="btn btn-outline btn-lg hover-scale">
+              🎬 Je veux concourir
+            </Link>
+          </div>
         </div>
       </section>
     </div>
