@@ -48,7 +48,7 @@ export class CandidatesController {
 
       return {
         success: true,
-        message: 'Inscription réussie ! Votre candidature sera validée par un administrateur.',
+        message: "Inscription réussie ! Votre candidature sera validée par un administrateur.",
         data: candidate,
       };
     } catch (error) {
