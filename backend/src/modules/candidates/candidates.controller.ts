@@ -10,7 +10,6 @@ import {
   UseGuards,
   Req,
   Logger,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
@@ -75,27 +74,17 @@ export class CandidatesController {
 
 
   /**
-   * Confirmer le paiement d'inscription candidat (WEBHOOK/INTERNAL)
+   * Confirmer manuellement le paiement d'inscription candidat (ADMIN ONLY)
    */
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Post(':id/registration/confirm')
-  async confirmRegistrationPayment(@Param('id') id: string, @Req() req: any) {
-    const secret = req.headers['x-registration-secret'];
-    const expectedSecret = process.env.REGISTRATION_CONFIRM_SECRET;
-
-    if (!expectedSecret) {
-      throw new ForbiddenException('Confirmation inscription désactivée (secret manquant)');
-    }
-
-    if (secret !== expectedSecret) {
-      throw new ForbiddenException('Signature de confirmation invalide');
-    }
-
+  async confirmRegistrationPayment(@Param('id') id: string, @CurrentUser() admin: any) {
     const candidate = await this.candidatesService.confirmRegistrationPayment(id);
 
     return {
       success: true,
-      message: 'Paiement confirmé, compte candidat activé',
+      message: `Paiement confirmé manuellement par ${admin?.email || 'ADMIN'}`,
       data: candidate,
     };
   }

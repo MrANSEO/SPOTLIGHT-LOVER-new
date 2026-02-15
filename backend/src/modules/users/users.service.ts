@@ -487,11 +487,9 @@ export class UsersService {
       return;
     }
 
-    await this.ensureSystemSettingsTable();
-
-    const rows = await this.prisma.$queryRaw<
-      Array<{ key: string; value: string }>
-    >`SELECT key, value FROM system_settings`;
+    const rows = await this.prisma.systemSetting.findMany({
+      select: { key: true, value: true },
+    });
 
     if (rows.length > 0) {
       const fromDb = rows.reduce((acc, row) => {
@@ -511,27 +509,13 @@ export class UsersService {
   }
 
   private async persistSystemSettings() {
-    await this.ensureSystemSettingsTable();
-
     for (const [key, value] of Object.entries(this.systemSettings)) {
-      await this.prisma.$executeRaw`
-        INSERT INTO system_settings(key, value, updated_at)
-        VALUES (${key}, ${String(value)}, datetime('now'))
-        ON CONFLICT(key) DO UPDATE SET
-          value = excluded.value,
-          updated_at = datetime('now')
-      `;
+      await this.prisma.systemSetting.upsert({
+        where: { key },
+        create: { key, value: String(value) },
+        update: { value: String(value) },
+      });
     }
-  }
-
-  private async ensureSystemSettingsTable() {
-    await this.prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS system_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT
-      )
-    `);
   }
 
   private parseSettingValue(raw: string): string | number | boolean {
