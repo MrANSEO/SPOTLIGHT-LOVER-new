@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -15,6 +15,31 @@ const initialForm = {
   videoDuration: 60,
 };
 
+const PHONE_REGEX = /^\+?[0-9\s-]{8,20}$/;
+
+const isValidUrl = (value) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const mapApiError = (message) => {
+  if (!message) return 'Échec inscription candidat';
+
+  if (message.includes('existe déjà')) {
+    return 'Un compte/candidat existe déjà avec cet email ou ce numéro.';
+  }
+
+  if (message.includes('temporairement fermées')) {
+    return 'Les inscriptions candidat sont fermées pour le moment.';
+  }
+
+  return message;
+};
+
 const CandidateApply = () => {
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,6 +54,22 @@ const CandidateApply = () => {
   const onChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const validationError = useMemo(() => {
+    if (!PHONE_REGEX.test(form.phone.trim())) {
+      return 'Le numéro de téléphone est invalide.';
+    }
+
+    if (!isValidUrl(form.videoUrl.trim())) {
+      return 'L\'URL de la vidéo est invalide (http/https requis).';
+    }
+
+    if (Number(form.videoDuration) > settings.maxVideoDurationSeconds) {
+      return `La durée vidéo maximale est ${settings.maxVideoDurationSeconds} secondes.`;
+    }
+
+    return '';
+  }, [form.phone, form.videoUrl, form.videoDuration, settings.maxVideoDurationSeconds]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -72,8 +113,8 @@ const CandidateApply = () => {
       return;
     }
 
-    if (Number(form.videoDuration) > settings.maxVideoDurationSeconds) {
-      setError(`La durée vidéo maximale est ${settings.maxVideoDurationSeconds} secondes.`);
+    if (validationError) {
+      setError(validationError);
       setIsSubmitting(false);
       return;
     }
@@ -92,7 +133,7 @@ const CandidateApply = () => {
       const data = await response.json();
 
       if (!response.ok || !data?.success) {
-        setError(data?.message || 'Échec inscription candidat');
+        setError(mapApiError(data?.message));
         return;
       }
 
@@ -134,6 +175,8 @@ const CandidateApply = () => {
           placeholder="Téléphone"
           value={form.phone}
           onChange={(e) => onChange('phone', e.target.value)}
+          pattern="^\\+?[0-9\\s-]{8,20}$"
+          title="8 à 20 caractères numériques (+, espace et tiret autorisés)"
           required
         />
         <input
@@ -164,6 +207,7 @@ const CandidateApply = () => {
           required
         />
         <input
+          type="url"
           placeholder="URL vidéo"
           value={form.videoUrl}
           onChange={(e) => onChange('videoUrl', e.target.value)}
@@ -178,10 +222,12 @@ const CandidateApply = () => {
           onChange={(e) => onChange('videoDuration', e.target.value)}
           required
         />
-        <button type="submit" disabled={isSubmitting || !settings.registrationEnabled}>
+        <button type="submit" disabled={isSubmitting || !settings.registrationEnabled || Boolean(validationError)}>
           {isSubmitting ? 'Inscription...' : '✅ S’inscrire et initier paiement'}
         </button>
       </form>
+
+      {validationError && <p style={{ color: '#ff6b6b' }}>{validationError}</p>}
 
       {error && <p style={{ color: '#ff6b6b' }}>{error}</p>}
 
@@ -194,6 +240,13 @@ const CandidateApply = () => {
             Référence paiement:{' '}
             <strong>{result?.registrationPayment?.reference}</strong>
           </p>
+          {result?.registrationPayment?.data?.paymentUrl && (
+            <p>
+              <a href={result.registrationPayment.data.paymentUrl} target="_blank" rel="noreferrer">
+                👉 Ouvrir la page de paiement
+              </a>
+            </p>
+          )}
           <p>
             Suivre le paiement:
             <Link
