@@ -1,22 +1,41 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ValidateCandidateDto, ValidationAction } from './dto/validate-candidate.dto';
 import { QueryCandidatesDto } from './dto/query-candidates.dto';
-import { CandidateStatus } from 'src/types/enums';
+import { CandidateStatus, PaymentStatus } from 'src/types/enums';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class CandidatesService {
   private readonly logger = new Logger(CandidatesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   /**
    * Créer un nouveau candidat (inscription publique)
    */
   async create(dto: CreateCandidateDto, ipAddress?: string, userAgent?: string) {
     this.logger.log(`📝 Nouvelle inscription candidat: ${dto.name}`);
+
+    const candidateSettings = await this.getCandidateSettings();
+
+    if (!candidateSettings.registrationEnabled) {
+      throw new BadRequestException('Les inscriptions candidat sont temporairement fermées');
+    }
+
+    if (
+      dto.videoDuration &&
+      dto.videoDuration > candidateSettings.maxVideoDurationSeconds
+    ) {
+      throw new BadRequestException(
+        `La durée vidéo maximale autorisée est ${candidateSettings.maxVideoDurationSeconds} secondes`,
+      );
+    }
 
     // Vérifier si l'IP est blacklistée
     if (ipAddress) {
@@ -35,54 +54,430 @@ export class CandidatesService {
       }
     }
 
-    // 1. Créer un User avec userType=CANDIDATE
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        name: dto.name,
-        phone: dto.phone,
-        userType: 'CANDIDATE',
-        password: '', // Pas de mot de passe pour l'inscription candidat (utilise lien magique/email)
-        isActive: true,
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: dto.email }, { phone: dto.phone }],
+      },
+      include: {
+        candidate: {
+          select: { id: true },
+        },
       },
     });
 
-    // 2. Créer le candidat avec status PENDING
-    const candidate = await this.prisma.candidate.create({
-      data: {
-        userId: user.id,
-        age: dto.age,
-        country: dto.country,
-        city: dto.city,
-        bio: dto.bio,
-        videoUrl: dto.videoUrl,
-        videoPublicId: dto.videoPublicId,
-        thumbnailUrl: dto.thumbnailUrl,
-        videoDuration: dto.videoDuration,
-        videoFormat: dto.videoFormat,
-        videoSize: dto.videoSize,
-        instagramHandle: dto.instagramHandle,
-        tiktokHandle: dto.tiktokHandle,
-        youtubeHandle: dto.youtubeHandle,
-        status: CandidateStatus.PENDING,
-        ipAddress,
-        userAgent,
-      },
+    if (existingUser?.candidate) {
+      throw new ConflictException('Ce candidat existe déjà');
+    }
+
+    if (existingUser && existingUser.userType !== 'CANDIDATE') {
+      throw new ConflictException(
+        'Un compte utilisateur existe déjà avec cet email ou ce numéro',
+      );
+    }
+
+    // 1 & 2. Créer user + candidat dans une transaction
+    const candidate = await this.prisma.$transaction(async (tx) => {
+      const user = existingUser
+        ? await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: dto.name,
+              userType: 'CANDIDATE',
+              isActive: false,
+            },
+          })
+        : await tx.user.create({
+            data: {
+              email: dto.email,
+              name: dto.name,
+              phone: dto.phone,
+              userType: 'CANDIDATE',
+              password: '', // Parcours candidature publique
+              isActive: false,
+            },
+          });
+
+      return tx.candidate.create({
+        data: {
+          userId: user.id,
+          age: dto.age,
+          country: dto.country,
+          city: dto.city,
+          bio: dto.bio,
+          videoUrl: dto.videoUrl,
+          videoPublicId: dto.videoPublicId,
+          thumbnailUrl: dto.thumbnailUrl,
+          videoDuration: dto.videoDuration,
+          videoFormat: dto.videoFormat,
+          videoSize: dto.videoSize,
+          instagramHandle: dto.instagramHandle,
+          tiktokHandle: dto.tiktokHandle,
+          youtubeHandle: dto.youtubeHandle,
+          status: CandidateStatus.PENDING,
+          ipAddress,
+          userAgent,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      });
+    });
+
+    this.logger.log(`✅ Candidat créé avec succès: ${candidate.id}`);
+
+    const payment = await this.initializeRegistrationPayment(candidate.id);
+
+    return {
+      ...candidate,
+      registrationFeeDue: candidateSettings.candidateRegistrationFee,
+      registrationPaymentStatus: payment.success ? 'PROCESSING' : 'PENDING',
+      registrationPayment: payment,
+    };
+  }
+
+
+  async initializeRegistrationPayment(candidateId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
       include: {
         user: {
           select: {
             id: true,
             name: true,
-            email: true,
             phone: true,
+            email: true,
           },
         },
       },
     });
 
-    this.logger.log(`✅ Candidat créé avec succès: ${candidate.id}`);
+    if (!candidate) {
+      throw new NotFoundException('Candidat introuvable');
+    }
 
-    return candidate;
+    if (candidate.status === CandidateStatus.APPROVED) {
+      return {
+        success: true,
+        reference: null,
+        providerReference: null,
+        message: 'Ce candidat est déjà activé',
+        data: { candidateId: candidate.id, status: candidate.status },
+      };
+    }
+
+    const existingPending = await this.prisma.candidateRegistrationPayment.findFirst({
+      where: {
+        candidateId: candidate.id,
+        status: {
+          in: ['PENDING', 'PROCESSING'],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingPending) {
+      return {
+        success: true,
+        reference: existingPending.reference,
+        providerReference: existingPending.providerReference,
+        message: 'Un paiement est déjà en cours pour ce candidat',
+        data: { status: existingPending.status },
+      };
+    }
+
+    const candidateSettings = await this.getCandidateSettings();
+
+    if (!candidateSettings.registrationEnabled) {
+      throw new BadRequestException(
+        'Les inscriptions candidat sont temporairement fermées',
+      );
+    }
+
+    const reference = `REG-${candidate.id}-${Date.now()}`;
+
+    const paymentResult = await this.paymentsService.initializePayment('mesomb', {
+      amount: candidateSettings.candidateRegistrationFee,
+      currency: 'XAF',
+      reference,
+      callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/candidate/payment-callback?reference=${reference}`,
+      webhookUrl: `${process.env.API_URL || 'http://localhost:4000'}/webhooks/mesomb`,
+      customerPhone: candidate.user.phone || undefined,
+      customerEmail: candidate.user.email || undefined,
+      customerName: candidate.user.name,
+      description: `Inscription candidat ${candidate.user.name}`,
+    });
+
+    await this.prisma.candidateRegistrationPayment.upsert({
+      where: { reference },
+      create: {
+        reference,
+        candidateId: candidate.id,
+        amount: candidateSettings.candidateRegistrationFee,
+        status: paymentResult.success ? PaymentStatus.PENDING : PaymentStatus.FAILED,
+        providerReference: paymentResult.providerReference || null,
+        payload: JSON.stringify(paymentResult.data || {}),
+      },
+      update: {
+        status: paymentResult.success ? PaymentStatus.PENDING : PaymentStatus.FAILED,
+        providerReference: paymentResult.providerReference || null,
+        payload: JSON.stringify(paymentResult.data || {}),
+      },
+    });
+
+    return {
+      success: paymentResult.success,
+      reference,
+      providerReference: paymentResult.providerReference,
+      message: paymentResult.message,
+      data: paymentResult.data,
+    };
+  }
+
+
+  async confirmRegistrationPayment(candidateId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      include: {
+        user: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException('Candidat introuvable');
+    }
+
+    if (candidate.status === CandidateStatus.APPROVED && candidate.user?.id) {
+      return candidate;
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: candidate.userId },
+        data: { isActive: true },
+      });
+
+      return tx.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: CandidateStatus.APPROVED,
+          validatedAt: new Date(),
+          validatedBy: 'SYSTEM_PAYMENT',
+          rejectionReason: null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+            },
+          },
+        },
+      });
+    });
+
+    return updated;
+  }
+
+  async confirmRegistrationPaymentByAdmin(
+    candidateId: string,
+    admin: { id?: string; email?: string } | null,
+    metadata?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const updatedCandidate = await this.confirmRegistrationPayment(candidateId);
+
+    if (!admin?.id) {
+      return updatedCandidate;
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        adminId: admin.id,
+        action: 'MANUAL_CONFIRM_REGISTRATION_PAYMENT',
+        entityType: 'CANDIDATE',
+        entityId: candidateId,
+        oldData: null,
+        newData: JSON.stringify({ status: updatedCandidate.status, validatedAt: updatedCandidate.validatedAt }),
+        details: `Confirmation manuelle du paiement d'inscription pour ${updatedCandidate.user?.email || candidateId}`,
+        ipAddress: metadata?.ipAddress || 'unknown',
+        userAgent: metadata?.userAgent || null,
+      },
+    });
+
+    return updatedCandidate;
+  }
+
+  async confirmRegistrationPaymentByReference(
+    reference: string,
+    status: PaymentStatus,
+    webhookPayload?: unknown,
+  ) {
+    let normalizedStatus = status;
+
+    if (!reference.startsWith('REG-')) {
+      this.logger.warn(`Référence invalide ignorée: ${reference}`);
+      return null;
+    }
+
+    const record = await this.prisma.candidateRegistrationPayment.findUnique({
+      where: { reference },
+      select: {
+        candidateId: true,
+        status: true,
+        providerReference: true,
+      },
+    });
+
+    if (!record) {
+      this.logger.warn(`Aucun paiement inscription trouvé pour référence ${reference}`);
+      return null;
+    }
+
+    const currentStatus = (record.status || '').toUpperCase();
+
+    // Idempotence : ne pas repasser un paiement déjà complété en FAILED/PENDING
+    if (currentStatus === 'COMPLETED' && normalizedStatus !== PaymentStatus.COMPLETED) {
+      return this.confirmRegistrationPayment(record.candidateId);
+    }
+
+    if (normalizedStatus === PaymentStatus.COMPLETED && record.providerReference) {
+      try {
+        const providerStatus = await this.paymentsService.getTransactionStatus(
+          'mesomb',
+          record.providerReference,
+        );
+
+        if (providerStatus.status !== 'completed') {
+          normalizedStatus = PaymentStatus.PENDING;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Vérification provider impossible pour ${reference}: ${error.message}`,
+        );
+      }
+    }
+
+    await this.prisma.candidateRegistrationPayment.update({
+      where: { reference },
+      data: {
+        status: normalizedStatus,
+        payload: JSON.stringify(webhookPayload || {}),
+      },
+    });
+
+    if (normalizedStatus !== PaymentStatus.COMPLETED) {
+      return null;
+    }
+
+    return this.confirmRegistrationPayment(record.candidateId);
+  }
+
+  async getRegistrationPaymentStatusByReference(reference: string) {
+    const record = await this.prisma.candidateRegistrationPayment.findUnique({
+      where: { reference },
+      include: {
+        candidate: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Référence de paiement introuvable');
+    }
+
+    return {
+      reference: record.reference,
+      candidate_id: record.candidateId,
+      amount: record.amount,
+      status: record.status,
+      provider_reference: record.providerReference,
+      updated_at: record.updatedAt,
+      created_at: record.createdAt,
+      candidate_status: record.candidate?.status || null,
+      last_payload: record.payload,
+    };
+  }
+
+  private async getCandidateSettings(): Promise<{
+    registrationEnabled: boolean;
+    maxVideoDurationSeconds: number;
+    candidateRegistrationFee: number;
+  }> {
+    const defaults = {
+      registrationEnabled: true,
+      maxVideoDurationSeconds: 90,
+      candidateRegistrationFee: 500,
+    };
+
+    try {
+      const rows = await this.prisma.systemSetting.findMany({
+        where: {
+          key: {
+            in: ['registrationEnabled', 'maxVideoDurationSeconds', 'candidateRegistrationFee'],
+          },
+        },
+        select: {
+          key: true,
+          value: true,
+        },
+      });
+
+      if (rows.length === 0) {
+        return defaults;
+      }
+
+      const map = new Map(rows.map((row) => [row.key, row.value]));
+      const registrationEnabledRaw = map.get('registrationEnabled');
+      const durationRaw = map.get('maxVideoDurationSeconds');
+      const registrationFeeRaw = map.get('candidateRegistrationFee');
+
+      const parsedDuration = durationRaw ? Number(durationRaw) : defaults.maxVideoDurationSeconds;
+      const parsedFee = registrationFeeRaw ? Number(registrationFeeRaw) : defaults.candidateRegistrationFee;
+
+      return {
+        registrationEnabled:
+          registrationEnabledRaw === undefined
+            ? defaults.registrationEnabled
+            : registrationEnabledRaw === 'true',
+        maxVideoDurationSeconds:
+          Number.isNaN(parsedDuration) || parsedDuration < 30
+            ? defaults.maxVideoDurationSeconds
+            : parsedDuration,
+        candidateRegistrationFee:
+          Number.isNaN(parsedFee) || parsedFee < 100
+            ? defaults.candidateRegistrationFee
+            : parsedFee,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de charger la configuration candidat: ${error.message}`,
+      );
+      return defaults;
+    }
+  }
+
+
+  async getPublicContestSettings() {
+    const candidateSettings = await this.getCandidateSettings();
+
+    return {
+      candidateRegistrationFee: candidateSettings.candidateRegistrationFee,
+      maxVideoDurationSeconds: candidateSettings.maxVideoDurationSeconds,
+      registrationEnabled: candidateSettings.registrationEnabled,
+    };
   }
 
   /**

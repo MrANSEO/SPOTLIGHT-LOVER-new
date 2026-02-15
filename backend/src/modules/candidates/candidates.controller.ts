@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -46,13 +47,87 @@ export class CandidatesController {
 
       return {
         success: true,
-        message: 'Inscription réussie ! Votre candidature sera validée par un administrateur.',
+        message: "Inscription réussie ! Votre candidature sera validée par un administrateur.",
         data: candidate,
       };
     } catch (error) {
       this.logger.error('❌ Erreur création candidat', error.message);
       throw error;
     }
+  }
+
+
+  /**
+   * Réinitialiser le paiement d'inscription candidat (PUBLIC)
+   */
+  @Public()
+  @Post(':id/registration-payment')
+  async initRegistrationPayment(@Param('id') id: string) {
+    const payment = await this.candidatesService.initializeRegistrationPayment(id);
+
+    return {
+      success: true,
+      message: "Paiement d'inscription initialisé",
+      data: payment,
+    };
+  }
+
+
+  /**
+   * Confirmer manuellement le paiement d'inscription candidat (ADMIN ONLY)
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Post(':id/registration/confirm')
+  async confirmRegistrationPayment(@Param('id') id: string, @CurrentUser() admin: any, @Req() req: any) {
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    const candidate = await this.candidatesService.confirmRegistrationPaymentByAdmin(
+      id,
+      { id: admin?.id, email: admin?.email },
+      { ipAddress, userAgent },
+    );
+
+    return {
+      success: true,
+      message: `Paiement confirmé manuellement par ${admin?.email || 'ADMIN'}`,
+      data: candidate,
+    };
+  }
+
+
+  /**
+   * Consulter le statut d'un paiement d'inscription par référence (PUBLIC)
+   */
+  @Public()
+  @Get('registration-payment/:reference')
+  async getRegistrationPaymentStatus(@Param('reference') reference: string) {
+    if (!reference.startsWith('REG-')) {
+      throw new BadRequestException("Référence de paiement invalide");
+    }
+
+    const status = await this.candidatesService.getRegistrationPaymentStatusByReference(reference);
+
+    return {
+      success: true,
+      data: status,
+    };
+  }
+
+
+  /**
+   * Paramètres publics du concours (PUBLIC)
+   */
+  @Public()
+  @Get('public-settings')
+  async getPublicContestSettings() {
+    const settings = await this.candidatesService.getPublicContestSettings();
+
+    return {
+      success: true,
+      data: settings,
+    };
   }
 
   /**

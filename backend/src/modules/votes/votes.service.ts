@@ -4,8 +4,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -16,7 +14,7 @@ import { Prisma } from '@prisma/client';
 @Injectable()
 export class VotesService {
   private readonly logger = new Logger(VotesService.name);
-  private readonly VOTE_AMOUNT = 100; // 100 FCFA par vote
+  private readonly DEFAULT_VOTE_AMOUNT = 100; // 100 FCFA par vote
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,8 +31,14 @@ export class VotesService {
     ipAddress?: string,
     userAgent?: string,
   ) {
-    const { candidateId, paymentMethod, phone, email, voterName, message } =
+    const { candidateId, paymentMethod, phone, email, voterName } =
       createVoteDto;
+
+    const votingConfig = await this.getVotingSettings();
+
+    if (!votingConfig.votingEnabled) {
+      throw new BadRequestException('Les votes sont temporairement désactivés');
+    }
 
     // 1. Vérifier que le candidat existe et est APPROVED
     const candidate = await this.prisma.candidate.findUnique({
@@ -150,7 +154,7 @@ export class VotesService {
       data: {
         voterId, // Association avec User
         candidateId,
-        amount: this.VOTE_AMOUNT,
+        amount: votingConfig.votePrice,
         currency: 'XOF',
         paymentMethod,
         paymentProvider,
@@ -192,7 +196,7 @@ export class VotesService {
       const paymentResult = await this.paymentsService.initializePayment(
         paymentMethod,
         {
-          amount: this.VOTE_AMOUNT,
+          amount: votingConfig.votePrice,
           currency: 'XOF',
           reference: transactionId,
           callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/vote/callback`,
@@ -239,7 +243,7 @@ export class VotesService {
       await this.prisma.transaction.create({
         data: {
           voteId: vote.id,
-          amount: this.VOTE_AMOUNT,
+          amount: votingConfig.votePrice,
           currency: 'XOF',
           paymentMethod,
           provider: paymentProvider,
@@ -276,6 +280,39 @@ export class VotesService {
       throw new BadRequestException(
         'Impossible d\'initialiser le paiement. Veuillez réessayer.',
       );
+    }
+  }
+
+  private async getVotingSettings(): Promise<{ votePrice: number; votingEnabled: boolean }> {
+    const defaults = {
+      votePrice: this.DEFAULT_VOTE_AMOUNT,
+      votingEnabled: true,
+    };
+
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ key: string; value: string }>>`
+        SELECT key, value FROM system_settings WHERE key IN ('votePrice', 'votingEnabled')
+      `;
+
+      if (rows.length === 0) {
+        return defaults;
+      }
+
+      const map = new Map(rows.map((row) => [row.key, row.value]));
+      const votePriceRaw = map.get('votePrice');
+      const votingEnabledRaw = map.get('votingEnabled');
+
+      const parsedVotePrice = votePriceRaw ? Number(votePriceRaw) : defaults.votePrice;
+
+      return {
+        votePrice: Number.isNaN(parsedVotePrice) || parsedVotePrice < 100
+          ? defaults.votePrice
+          : parsedVotePrice,
+        votingEnabled: votingEnabledRaw === undefined ? defaults.votingEnabled : votingEnabledRaw === 'true',
+      };
+    } catch (error) {
+      this.logger.warn(`Impossible de charger la configuration de vote: ${error.message}`);
+      return defaults;
     }
   }
 
