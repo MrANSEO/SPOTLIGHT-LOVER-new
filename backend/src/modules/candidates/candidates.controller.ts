@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Logger,
+  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
@@ -67,31 +68,30 @@ export class CandidatesController {
 
     return {
       success: true,
-      message: "Paiement d'inscription initialisé",
+      message: 'Paiement d'inscription initialisé',
       data: payment,
     };
   }
 
 
   /**
-   * Confirmer manuellement le paiement d'inscription candidat (ADMIN ONLY)
+   * Confirmer le paiement d'inscription candidat (WEBHOOK/INTERNAL)
    */
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Public()
   @Post(':id/registration/confirm')
-  async confirmRegistrationPayment(@Param('id') id: string, @CurrentUser() admin: any, @Req() req: any) {
-    const ipAddress = req.ip || req.connection?.remoteAddress;
-    const userAgent = req.headers['user-agent'];
+  async confirmRegistrationPayment(@Param('id') id: string, @Req() req: any) {
+    const secret = req.headers['x-registration-secret'];
+    const expectedSecret = process.env.REGISTRATION_CONFIRM_SECRET || 'dev-registration-secret';
 
-    const candidate = await this.candidatesService.confirmRegistrationPaymentByAdmin(
-      id,
-      { id: admin?.id, email: admin?.email },
-      { ipAddress, userAgent },
-    );
+    if (secret !== expectedSecret) {
+      throw new ForbiddenException('Signature de confirmation invalide');
+    }
+
+    const candidate = await this.candidatesService.confirmRegistrationPayment(id);
 
     return {
       success: true,
-      message: `Paiement confirmé manuellement par ${admin?.email || 'ADMIN'}`,
+      message: 'Paiement confirmé, compte candidat activé',
       data: candidate,
     };
   }
@@ -104,7 +104,7 @@ export class CandidatesController {
   @Get('registration-payment/:reference')
   async getRegistrationPaymentStatus(@Param('reference') reference: string) {
     if (!reference.startsWith('REG-')) {
-      throw new BadRequestException("Référence de paiement invalide");
+      throw new BadRequestException('Référence de paiement invalide');
     }
 
     const status = await this.candidatesService.getRegistrationPaymentStatusByReference(reference);
@@ -112,21 +112,6 @@ export class CandidatesController {
     return {
       success: true,
       data: status,
-    };
-  }
-
-
-  /**
-   * Paramètres publics du concours (PUBLIC)
-   */
-  @Public()
-  @Get('public-settings')
-  async getPublicContestSettings() {
-    const settings = await this.candidatesService.getPublicContestSettings();
-
-    return {
-      success: true,
-      data: settings,
     };
   }
 
