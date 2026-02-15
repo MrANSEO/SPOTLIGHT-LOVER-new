@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const CandidatePaymentCallback = () => {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fallbackStatus = (searchParams.get('status') || 'pending').toLowerCase();
   const reference = searchParams.get('reference');
@@ -17,16 +16,11 @@ const CandidatePaymentCallback = () => {
   const [retryMessage, setRetryMessage] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
 
-  const isReferenceValid = useMemo(() => Boolean(reference && reference.startsWith('REG-')), [reference]);
-
-  const shouldPoll = useMemo(
-    () => Boolean(isReferenceValid && (status === 'pending' || status === 'processing') && attemptCount < 12),
-    [isReferenceValid, status, attemptCount],
-  );
+  const shouldPoll = useMemo(() => Boolean(reference && (status === 'pending' || status === 'processing') && attemptCount < 12), [reference, status, attemptCount]);
 
   useEffect(() => {
     const loadStatus = async () => {
-      if (!isReferenceValid) {
+      if (!reference) {
         return;
       }
 
@@ -63,11 +57,10 @@ const CandidatePaymentCallback = () => {
 
     const interval = setInterval(loadStatus, 5000);
     return () => clearInterval(interval);
-  }, [reference, isReferenceValid, shouldPoll]);
+  }, [reference, shouldPoll]);
 
   const isSuccess = status === 'success' || status === 'completed';
   const isFailed = status === 'failed' || status === 'cancelled';
-  const canRetry = Boolean(candidateId && (isFailed || attemptCount >= 12));
 
 
   const handleRetryPayment = async () => {
@@ -91,13 +84,6 @@ const CandidatePaymentCallback = () => {
         return;
       }
 
-      const nextReference = result?.data?.reference;
-      if (nextReference && nextReference !== reference) {
-        navigate(`/candidate/payment-callback?reference=${encodeURIComponent(nextReference)}`, {
-          replace: true,
-        });
-      }
-
       setRetryMessage('✅ Paiement relancé. Vérifiez votre téléphone pour confirmer la transaction.');
       setStatus('pending');
       setAttemptCount(0);
@@ -111,7 +97,6 @@ const CandidatePaymentCallback = () => {
   return (
     <div style={{ padding: '2rem 1rem', maxWidth: 720, margin: '0 auto' }}>
       <h1>💳 Paiement inscription candidat</h1>
-      {!isReferenceValid && <p>❌ Référence de paiement invalide ou manquante.</p>}
       {isLoading && <p>⏳ Vérification du statut de paiement...</p>}
       {!isLoading && isSuccess && <p>✅ Paiement confirmé. Votre compte candidat est en cours d'activation.</p>}
       {!isLoading && isFailed && <p>❌ Le paiement a échoué ou a été annulé. Veuillez réessayer.</p>}
@@ -123,11 +108,9 @@ const CandidatePaymentCallback = () => {
       {reference && <p>Référence: <strong>{reference}</strong></p>}
       {candidateStatus && <p>Statut candidat: <strong>{candidateStatus}</strong></p>}
       <p>Si besoin, vous pouvez relancer le paiement ci-dessous.</p>
-      {canRetry && (
-        <button onClick={handleRetryPayment} disabled={isRetrying}>
-          {isRetrying ? 'Relance en cours...' : '🔁 Relancer le paiement'}
-        </button>
-      )}
+      <button onClick={handleRetryPayment} disabled={isRetrying || !candidateId}>
+        {isRetrying ? 'Relance en cours...' : '🔁 Relancer le paiement'}
+      </button>
       {retryMessage && <p>{retryMessage}</p>}
       <Link to="/">Retour à l'accueil</Link>
     </div>

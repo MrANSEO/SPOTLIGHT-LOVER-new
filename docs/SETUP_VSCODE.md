@@ -4,12 +4,6 @@ Ce guide te montre **exactement** comment lancer le projet en local avec VS Code
 
 ---
 
-## 0) Important (stabilité dépendances backend)
-
-Le backend utilise NestJS v10. Pour éviter les conflits de peer deps, le package `@nestjs/swagger` est aligné en v7 (compatible Nest 10).
-
----
-
 ## 1) Prérequis
 
 Installe ces outils avant de commencer :
@@ -177,18 +171,7 @@ npx prisma generate
 
 ---
 
-
-## 8) VS Code Tasks (optionnel mais pratique)
-
-Le repo contient `.vscode/tasks.json`. Dans VS Code :
-
-- `Ctrl+Shift+P` → **Tasks: Run Task**
-- Lance `project: dev (backend + frontend)` pour démarrer les 2 apps
-- Ou lance séparément `backend: dev` et `frontend: dev`
-
----
-
-## 9) Commandes VS Code utiles
+## 8) Commandes VS Code utiles
 
 Dans VS Code (`Ctrl+Shift+P`) :
 - **Tasks: Run Task** → lancer scripts npm
@@ -197,7 +180,7 @@ Dans VS Code (`Ctrl+Shift+P`) :
 
 ---
 
-## 10) Déploiement (résumé)
+## 9) Déploiement (résumé)
 
 - Frontend : Vercel/Netlify
 - Backend : Render/Railway/Fly.io
