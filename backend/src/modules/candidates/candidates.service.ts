@@ -83,6 +83,7 @@ export class CandidatesService {
             data: {
               name: dto.name,
               userType: 'CANDIDATE',
+              isActive: false,
             },
           })
         : await tx.user.create({
@@ -275,7 +276,8 @@ export class CandidatesService {
       return this.confirmRegistrationPayment(candidateId);
     }
 
-    // Vérification provider avant activation finale (best-effort)
+    // Vérification provider avant activation finale (best-effort).
+    // En cas d'incohérence provider, on garde le paiement en PENDING pour éviter un rejet faux négatif.
     if (normalizedStatus === PaymentStatus.COMPLETED && providerReference) {
       try {
         const providerStatus = await this.paymentsService.getTransactionStatus(
@@ -284,7 +286,7 @@ export class CandidatesService {
         );
 
         if (providerStatus.status !== 'completed') {
-          normalizedStatus = PaymentStatus.FAILED;
+          normalizedStatus = PaymentStatus.PENDING;
         }
       } catch (error) {
         this.logger.warn(
