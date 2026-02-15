@@ -54,6 +54,12 @@ const Header = () => {
           >
             Classement
           </Link>
+          <Link 
+            to="/become-candidate" 
+            className={`nav-link ${isActive('/become-candidate') ? 'active' : ''}`}
+          >
+            Devenir candidat
+          </Link>
         </nav>
 
         {/* Boutons Auth / User Menu */}
@@ -127,6 +133,14 @@ const Header = () => {
             >
               <span className="nav-icon">🏆</span>
               Classement
+            </Link>
+            <Link 
+              to="/become-candidate" 
+              className={`nav-link ${isActive('/become-candidate') ? 'active' : ''}`}
+              onClick={toggleMenu}
+            >
+              <span className="nav-icon">🎬</span>
+              Devenir candidat
             </Link>
             <div className="divider"></div>
             {isAuthenticated ? (
