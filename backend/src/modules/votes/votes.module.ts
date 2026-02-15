@@ -5,12 +5,14 @@ import { VotesService } from './votes.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { LeaderboardModule } from '../leaderboard/leaderboard.module';
+import { CandidatesModule } from '../candidates/candidates.module';
 
 @Module({
   imports: [
     PrismaModule, 
     PaymentsModule, 
     forwardRef(() => LeaderboardModule),
+    CandidatesModule,
   ],
   controllers: [VotesController, WebhooksController],
   providers: [VotesService],
